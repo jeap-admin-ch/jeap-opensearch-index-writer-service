@@ -1,0 +1,20 @@
+{
+  "properties": [
+    {
+      "name": "jeap.opensearch.indexwriter.opensearch.connection-type",
+      "type": "ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch.AdapterOpenSearchProperties$ConnectionType",
+      "description": "The connection type used to connect to OpenSearch. Defaults to AWS.",
+      "defaultValue": "AWS"
+    },
+    {
+      "name": "jeap.opensearch.indexwriter.opensearch.aws.endpoint",
+      "type": "java.lang.String",
+      "description": "The endpoint URL of the AWS OpenSearch domain."
+    },
+    {
+      "name": "jeap.opensearch.indexwriter.opensearch.aws.region",
+      "type": "java.lang.String",
+      "description": "The AWS region of the OpenSearch domain (e.g. eu-central-2)."
+    }
+  ]
+}

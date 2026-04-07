@@ -1,0 +1,9 @@
+logging:
+  level:
+    ch.admin.bit.jeap.governance: DEBUG
+
+spring:
+  application:
+    name: jeap-opensearch-index-writer-service-test
+  main:
+    banner-mode: off

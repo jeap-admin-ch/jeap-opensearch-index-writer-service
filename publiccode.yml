@@ -1,0 +1,59 @@
+publiccodeYmlVersion: 0.5.0
+name: jeap-opensearch-index-writer-service
+applicationSuite: jEAP
+softwareVersion: 0.0.1
+releaseDate: 2026-04-09
+url: "https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service.git"
+landingURL: "https://github.com/jeap-admin-ch/jeap"
+platforms:
+  - web
+categories:
+  - application-development
+developmentStatus: stable
+softwareType: library
+organisation:
+  uri: https://ld.admin.ch/office/V.1.7
+  name: Federal Office of Information Technology, Systems and Telecommunication
+description:
+  en:
+    localisedName: jeap-opensearch-index-writer-service
+    shortDescription: Service template to provide event-driven indexing of search items into OpenSearch based on a declarative message and operation configuration.
+    longDescription: >
+      The jEAP OpenSearch Index Writer Service bridges Kafka event streams and OpenSearch indices
+      using a declarative message configuration. Each message binds an event type and topic to
+      one or more operations, where each operation defines an index type, an index operation
+      (UPSERT or DELETE), a SearchItem Provider URI, and a reference provider that extracts the
+      business object reference (OriginType, Id, optional Version) from the event.
+
+      Operations can be guarded by conditions and feature flags, ensuring that indexing only
+      occurs when relevant. Before writing, the service validates that the SearchItem returned
+      by the provider is compatible with the target IndexType definition. The service manages
+      search item timestamps and minor version automatically, and always writes via the
+      IndexWriteAlias to support platform-managed index rotation.
+
+      On startup, the service validates index mappings against the IndexType definitions,
+      applying compatible updates automatically and refusing to start when an incompatible
+      deviation is detected. Failed index operations are forwarded to the jEAP error handling
+      service to ensure no event is lost.
+    features:
+      - Declarative message configuration mapping event types and topics to index operations (UPSERT/DELETE)
+      - Multiple operations per message, each targeting a specific IndexType and SearchItem Provider
+      - Reference provider extracts business object reference (OriginType, Id, optional Version) from events
+      - Conditional operation execution based on event conditions or feature flags
+      - Schema validation ensures SearchItem compatibility with the target IndexType before writing
+      - Automatic management of search_item.created, search_item.modified, and search_item.minor_version
+      - Writes via IndexWriteAlias to support platform-managed index rotation
+      - Startup validation of index mappings with automatic update for compatible deviations
+      - Error handling integration for failed index operations
+
+legal:
+  license: Apache-2.0
+maintenance:
+  type: internal
+  contacts:
+    - name: Federal Office of Information Technology, Systems and Telecommunication FOITT
+      email: jeap-community@bit.admin.ch
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - en
