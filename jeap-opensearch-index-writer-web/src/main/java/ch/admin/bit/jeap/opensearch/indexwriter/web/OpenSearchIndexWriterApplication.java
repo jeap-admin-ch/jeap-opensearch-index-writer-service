@@ -19,15 +19,10 @@ public class OpenSearchIndexWriterApplication {
             \t\
             {} is running!\s
             \t\
-            
-            \tSwaggerUI: \t\t\t\thttp://localhost:{}{}/swagger-ui/index.html?urls.primaryName=Governance-Service-API
-            \t\
             Profile(s): \t\t\t{}\
             
             ----------------------------------------------------------""",
                 env.getProperty("spring.application.name"),
-                env.getProperty("server.port"),
-                env.getProperty("server.servlet.context-path"),
                 env.getActiveProfiles());
     }
 }
