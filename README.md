@@ -11,7 +11,7 @@ Service template to provide event-driven indexing of search items into OpenSearc
 - **Conditional Execution:** operations can reference a condition; the operation is only executed if the event satisfies it
 - **Feature Flags:** operations can be guarded by a feature flag; the operation is skipped when the flag is inactive
 - **Schema Validation:** Before writing, the service verifies that the SearchItem returned by the provider is compatible with the target IndexType definition
-- **Managed Timestamps:** The service sets `search_item.created`, `search_item.modified`, and `search_item.minor_version` on each SearchItem
+- **Managed Timestamps:** The service sets `search_item.upserted_at` and `search_item.minor_version` on each SearchItem
 - **Index Alias Writes:** All writes use the `IndexWriteAlias` of the IndexTypeVersion, supporting platform-managed index rotation
 - **Error Handling:** If an index operation fails, the triggering event is forwarded to the jEAP error handling service
 - **Startup Mapping Validation:** On startup, the service compares the index mappings against the IndexType definitions — compatible deviations are updated automatically, incompatible deviations prevent startup
@@ -49,6 +49,11 @@ jeap:
 ## Changes
 
 This library needs to be versioned using [Semantic Versioning](http://semver.org/) and all changes need to be documented at [CHANGELOG.md](./CHANGELOG.md) following the format defined in [Keep a Changelog](http://keepachangelog.com/).
+
+## Index Type Registry Maven Plugin
+
+The plugin that validates and generates artifacts from the index type registry is documented separately:
+[jeap-opensearch-index-type-registry-maven-plugin/README.md](jeap-opensearch-index-type-registry-maven-plugin/README.md)
 
 ## Note
 

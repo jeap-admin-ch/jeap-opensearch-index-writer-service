@@ -1,0 +1,16 @@
+{
+  "system": "JME",
+  "originType": "JmeDecreeDocument",
+  "description": "Indexes decree documents from the JME Process Archive Service.",
+  "documentationUrl": "https://example.com/docs/jme/decreedocument",
+  "roles": [
+    "jme_read"
+  ],
+  "mappingVersions": [
+    {
+      "major": 1,
+      "minor": 0,
+      "mappingDefinition": "JmeDecreeDocument_mapping_v1_0.json"
+    }
+  ]
+}

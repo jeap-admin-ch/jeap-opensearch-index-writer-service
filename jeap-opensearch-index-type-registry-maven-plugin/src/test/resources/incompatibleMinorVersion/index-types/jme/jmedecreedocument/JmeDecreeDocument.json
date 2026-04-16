@@ -1,0 +1,18 @@
+{
+  "system": "JME",
+  "originType": "JmeDecreeDocument",
+  "description": "Test index type with incompatible minor version.",
+  "roles": ["jme_read"],
+  "mappingVersions": [
+    {
+      "major": 1,
+      "minor": 0,
+      "mappingDefinition": "JmeDecreeDocument_mapping_v1_0.json"
+    },
+    {
+      "major": 1,
+      "minor": 1,
+      "mappingDefinition": "JmeDecreeDocument_mapping_v1_1.json"
+    }
+  ]
+}
