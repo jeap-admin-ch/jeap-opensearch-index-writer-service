@@ -1,9 +1,33 @@
-logging:
-  level:
-    ch.admin.bit.jeap.governance: DEBUG
-
 spring:
   application:
-    name: jeap-opensearch-index-writer-service-test
+    name: jeap-opensearch-index-writer-it
   main:
     banner-mode: off
+    allow-bean-definition-overriding: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+  security:
+    oauth2:
+      client:
+        registration:
+          search-item-provider:
+            client-id: test-client
+            client-secret: test-secret
+            authorization-grant-type: client_credentials
+            provider: search-item-provider
+        provider:
+          search-item-provider:
+            token-uri: http://localhost:1/oauth/token
+
+jeap:
+  opensearch:
+    indexwriter:
+      opensearch:
+        aws:
+          endpoint: http://localhost:1
+          region: eu-central-1
+
+logging:
+  level:
+    ch.admin.bit.jeap: INFO

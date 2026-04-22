@@ -1,0 +1,4 @@
+ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITTestIndexType
+ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITTestIndexTypeTrueCondition
+ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITTestIndexTypeFalseCondition
+ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITTestIndexTypeFeatureFlag

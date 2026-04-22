@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "messageName": "PreziusRegistrationCreated",
+      "topicName": "ch.admin.bit.prezius.registration-created",
+      "operations": [
+        {
+          "indexType": "PreziusRegistration",
+          "indexOperation": "UPSERT",
+          "uri": "https://prezius/api/v1/registrations/{id}",
+          "referenceProvider": "PreziusRegistrationReferenceProvider",
+          "condition": "PreziusRegistrationIsActiveCondition",
+          "featureFlag": "PREZIUS_REGISTRATION_INDEXING"
+        }
+      ]
+    },
+    {
+      "messageName": "PreziusRegistrationDeleted",
+      "topicName": "ch.admin.bit.prezius.registration-deleted",
+      "operations": [
+        {
+          "indexType": "PreziusRegistration",
+          "indexOperation": "delete",
+          "uri": "https://prezius/api/v1/registrations/{id}",
+          "referenceProvider": "PreziusRegistrationReferenceProvider"
+        }
+      ]
+    }
+  ]
+}

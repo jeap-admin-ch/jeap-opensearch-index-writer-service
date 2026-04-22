@@ -1,0 +1,15 @@
+{
+  "messages": [
+    {
+      "messageName": "PreziusRegistrationCreated",
+      "topicName": "ch.admin.bit.prezius.registration-created",
+      "operations": [
+        {
+          "indexType": "PreziusRegistration",
+          "indexOperation": "UPSERT",
+          "referenceProvider": "PreziusRegistrationReferenceProvider"
+        }
+      ]
+    }
+  ]
+}

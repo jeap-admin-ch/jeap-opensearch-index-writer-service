@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "jeap.opensearch.indexwriter.search-item-provider.oauth-client",
+      "type": "java.lang.String",
+      "description": "The OAuth2 client registration ID (defined under spring.security.oauth2.client.registration) used to authenticate HTTP requests to the search item provider.",
+      "defaultValue": "search-item-provider"
+    }
+  ]
+}

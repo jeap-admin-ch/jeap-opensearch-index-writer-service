@@ -13,7 +13,6 @@ public class AdapterOpenSearchProperties {
     private ConnectionType connectionType = ConnectionType.AWS;
     private Aws aws;
 
-
     @PostConstruct
     void log() {
         log.info("Initialized AdapterOpenSearchProperties with connectionType: {} and aws: {}", connectionType, aws);

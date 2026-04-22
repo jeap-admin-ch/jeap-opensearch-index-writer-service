@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "jeap.opensearch.index-writer.messages-location",
+      "type": "java.lang.String",
+      "description": "Classpath or file-system location of the messages.json configuration file that maps Kafka message types to index operations.",
+      "defaultValue": "classpath:/opensearch/messages.json"
+    }
+  ]
+}

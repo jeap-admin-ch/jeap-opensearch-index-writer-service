@@ -4,14 +4,14 @@ Service template to provide event-driven indexing of search items into OpenSearc
 
 ## Key Features
 
-- **Declarative Message Configuration:** Messages wih operation map an event type and topic to an index type and index operation (`UPSERT` or `DELETE`)
+- **Declarative Message Configuration:** Messages with operations map an event type and topic to an index type and index operation (`UPSERT` or `DELETE`)
 - **Multiple Operations:** Any number of operations can be configured per service instance
 - **Reference Provider:** Each operation references a provider that extracts the business object reference (OriginType, Id, optional Version) from the incoming event
 - **SearchItem Provider:** Each operation declares the host of the SearchItem Provider API from which the search item is fetched
 - **Conditional Execution:** operations can reference a condition; the operation is only executed if the event satisfies it
 - **Feature Flags:** operations can be guarded by a feature flag; the operation is skipped when the flag is inactive
 - **Schema Validation:** Before writing, the service verifies that the SearchItem returned by the provider is compatible with the target IndexType definition
-- **Managed Timestamps:** The service sets `search_item.upserted_at` and `search_item.minor_version` on each SearchItem
+- **Managed Metadata:** Before writing, the service enriches each `SearchItem` with `search_item.upserted_at` (timestamp of the index write) and `search_item.minor_version` (minor version of the `IndexType` mapping used at write time)
 - **Index Alias Writes:** All writes use the `IndexWriteAlias` of the IndexTypeVersion, supporting platform-managed index rotation
 - **Error Handling:** If an index operation fails, the triggering event is forwarded to the jEAP error handling service
 - **Startup Mapping Validation:** On startup, the service compares the index mappings against the IndexType definitions — compatible deviations are updated automatically, incompatible deviations prevent startup
@@ -20,18 +20,20 @@ Service template to provide event-driven indexing of search items into OpenSearc
 
 Normally you will not use this project directly, but instead set up your own index writer service instance by depending on this template, then adding specific message and operation configuration.
 
-## Configuration
+## Properties
+
+| Property                                                         | Default                               | Description                                                                                                                   |
+|------------------------------------------------------------------|---------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| `jeap.opensearch.indexwriter.opensearch.connection-type`         | `AWS`                                 | Connection type. Currently only `AWS` is supported.                                                                           |
+| `jeap.opensearch.indexwriter.opensearch.aws.endpoint`            | —                                     | Endpoint URL of the AWS OpenSearch domain.                                                                                    |
+| `jeap.opensearch.indexwriter.opensearch.aws.region`              | —                                     | AWS region of the OpenSearch domain (e.g. `eu-central-2`).                                                                    |
+| `jeap.opensearch.indexwriter.search-item-provider.oauth-client`  | `search-item-provider`                | OAuth2 client registration name (from `spring.security.oauth2.client`) used to authenticate calls to the SearchItem provider. |
+| `jeap.opensearch.index-writer.messages-location`                 | `classpath:/opensearch/messages.json` | Classpath or file-system location of the messages configuration file.                                                         |
 
 ### OpenSearch Connection
 
 Configure the OpenSearch adapter via the `jeap.opensearch.indexwriter.opensearch` prefix.
 The default connection type is `AWS`.
-
-| Property                                                 | Default | Description                                                |
-|----------------------------------------------------------|---------|------------------------------------------------------------|
-| `jeap.opensearch.indexwriter.opensearch.connection-type` | `AWS`   | Connection type. Currently only `AWS` is supported.        |
-| `jeap.opensearch.indexwriter.opensearch.aws.endpoint`    | —       | Endpoint URL of the AWS OpenSearch domain.                 |
-| `jeap.opensearch.indexwriter.opensearch.aws.region`      | —       | AWS region of the OpenSearch domain (e.g. `eu-central-2`). |
 
 Example:
 
@@ -45,6 +47,55 @@ jeap:
           endpoint: https://my-domain.eu-central-2.es.amazonaws.com
           region: eu-central-2
 ```
+
+### Remote Data (SearchItem Provider)
+
+The service fetches SearchItems from a remote HTTP API. Configure the OAuth2 client registration used for those calls.
+
+Example:
+
+```yaml
+jeap:
+  opensearch:
+    indexwriter:
+      search-item-provider:
+        oauth-client: my-search-item-provider-client
+```
+
+### Message Configuration
+
+Message-to-operation mappings are loaded at startup from the location configured by `jeap.opensearch.index-writer.messages-location`.
+Each entry in the array declares which Kafka topic and message type trigger which index operation. See the project README of your service instance for the JSON structure.
+
+## Consumer Contract Enforcement
+
+The service enforces jEAP messaging consumer contracts at startup. Each Kafka message type configured in `messages.json` must have a matching consumer contract registered for the application.
+
+Consumer contracts are generated at compile time by placing the `@JeapMessageConsumerContractsByTemplates` annotation on any class in the service instance module. The annotation reads the message configuration file and generates one consumer contract per configured message type.
+
+```java
+@JeapMessageConsumerContractsByTemplates(
+    appName     = "my-opensearch-index-writer",
+    templatesPath = "opensearch"   // directory under src/main/resources containing messages.json
+)
+class MyOpenSearchIndexWriterApplication {
+}
+```
+
+| Attribute         | Description                                                                                                                                                                                  |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `appName`         | Logical application name used for the consumer contracts. Defaults to `spring.application.name` from `application.y[a]ml` when not set.                                                      |
+| `templatesPath`   | Path relative to `src/main/resources` containing `messages.json`. Must match the directory of the `jeap.opensearch.index-writer.messages-location` property (default: `opensearch`). |
+
+The annotation is processed by `jeap-messaging-contract-annotation-processor` (pulled in transitively). If the annotation is absent, or the resolved `appName` does not match `spring.application.name`, the service will refuse to start with a `NoContractException`.
+
+## Metrics
+
+The service publishes the following Micrometer metrics:
+
+| Metric                                  | Type  | Tags           | Description                                                                                                                                                           |
+|-----------------------------------------|-------|----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jeap.opensearch.indexwriter.indexing`  | Timer | `message_type` | Time spent processing a single indexing operation (includes skipped and failed ones). The `message_type` tag contains the name of the triggering Kafka message type.  |
 
 ## Changes
 

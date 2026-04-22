@@ -1,0 +1,43 @@
+{
+  "messages": [
+    {
+      "messageName": "JmeDeclarationCreatedEvent",
+      "topicName": "test-index-writer",
+      "operations": [
+        {
+          "indexType": "TestDocument",
+          "indexOperation": "UPSERT",
+          "uri": "${test.wiremock.base-url}",
+          "referenceProvider": "ITReferenceProvider"
+        },
+        {
+          "indexType": "TestDocument",
+          "indexOperation": "DELETE",
+          "uri": "${test.wiremock.base-url}",
+          "referenceProvider": "ITReferenceProvider"
+        },
+        {
+          "indexType": "TestDocumentTrueCondition",
+          "indexOperation": "UPSERT",
+          "uri": "${test.wiremock.base-url}",
+          "referenceProvider": "ITReferenceProvider",
+          "condition": "ITAlwaysTrueCondition"
+        },
+        {
+          "indexType": "TestDocumentFalseCondition",
+          "indexOperation": "UPSERT",
+          "uri": "${test.wiremock.base-url}",
+          "referenceProvider": "ITReferenceProvider",
+          "condition": "ITAlwaysFalseCondition"
+        },
+        {
+          "indexType": "TestDocumentFeatureFlag",
+          "indexOperation": "UPSERT",
+          "uri": "${test.wiremock.base-url}",
+          "referenceProvider": "ITReferenceProvider",
+          "featureFlag": "IT_FEATURE_FLAG_INDEXING"
+        }
+      ]
+    }
+  ]
+}

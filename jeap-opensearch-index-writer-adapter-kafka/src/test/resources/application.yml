@@ -1,0 +1,7 @@
+consumerContractInterceptor.allowNoContractEvents: true
+
+spring:
+  application:
+    name: jeap-opensearch-index-writer-kafka-it
+  main:
+    banner-mode: off
