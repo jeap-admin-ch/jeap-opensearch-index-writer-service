@@ -40,9 +40,9 @@ class JsonMessageConfigurationRepositoryTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        when(indexingConditionRepository.getIndexingCondition("PreziusRegistrationIsActiveCondition"))
+        when(indexingConditionRepository.getIndexingCondition("ch.admin.bit.prezius.PreziusRegistrationIsActiveCondition"))
                 .thenReturn(registrationIsActiveCondition);
-        when(referenceProviderRepository.getReferenceProvider(any(), eq("PreziusRegistrationReferenceProvider")))
+        when(referenceProviderRepository.getReferenceProvider(any(), eq("ch.admin.bit.prezius.PreziusRegistrationReferenceProvider")))
                 .thenReturn(registrationReferenceProvider);
 
         repository = new JsonMessageConfigurationRepository(indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),

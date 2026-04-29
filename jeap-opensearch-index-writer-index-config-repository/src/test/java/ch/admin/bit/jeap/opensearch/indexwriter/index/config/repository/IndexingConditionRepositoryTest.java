@@ -33,9 +33,9 @@ class IndexingConditionRepositoryTest {
             new IndexingConditionRepository(List.of(activeCondition, inactiveCondition));
 
     @Test
-    void getIndexingCondition_returnsConditionBySimpleClassName() {
-        assertThat(repository.getIndexingCondition("ActiveCondition")).isSameAs(activeCondition);
-        assertThat(repository.getIndexingCondition("InactiveCondition")).isSameAs(inactiveCondition);
+    void getIndexingCondition_returnsByFqn() {
+        assertThat(repository.getIndexingCondition(ActiveCondition.class.getName())).isSameAs(activeCondition);
+        assertThat(repository.getIndexingCondition(InactiveCondition.class.getName())).isSameAs(inactiveCondition);
     }
 
     @Test

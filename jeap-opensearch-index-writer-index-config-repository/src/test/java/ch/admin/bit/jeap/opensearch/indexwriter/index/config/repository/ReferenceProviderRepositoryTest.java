@@ -34,9 +34,11 @@ class ReferenceProviderRepositoryTest {
             new ReferenceProviderRepository(List.of(fooProvider, barProvider));
 
     @Test
-    void getReferenceProvider_returnsProviderBySimpleClassName() {
-        assertThat(repository.getReferenceProvider("SomeMessage", "FooReferenceProvider")).isSameAs(fooProvider);
-        assertThat(repository.getReferenceProvider("SomeMessage", "BarReferenceProvider")).isSameAs(barProvider);
+    void getReferenceProvider_returnsByFqn() {
+        String fooFqn = FooReferenceProvider.class.getName();
+        String barFqn = BarReferenceProvider.class.getName();
+        assertThat(repository.getReferenceProvider("SomeMessage", fooFqn)).isSameAs(fooProvider);
+        assertThat(repository.getReferenceProvider("SomeMessage", barFqn)).isSameAs(barProvider);
     }
 
     @Test

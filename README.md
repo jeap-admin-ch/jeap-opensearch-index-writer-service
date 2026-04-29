@@ -64,8 +64,61 @@ jeap:
 
 ### Message Configuration
 
-Message-to-operation mappings are loaded at startup from the location configured by `jeap.opensearch.index-writer.messages-location`.
-Each entry in the array declares which Kafka topic and message type trigger which index operation. See the project README of your service instance for the JSON structure.
+Message-to-operation mappings are loaded at startup from the location configured by `jeap.opensearch.index-writer.messages-location` (default: `classpath:/opensearch/messages.json`).
+
+Each entry in the `messages` array maps a Kafka message type and topic to one or more index operations.
+
+```json
+{
+  "messages": [
+    {
+      "messageName": "MyDocumentCreatedEvent",
+      "topicName": "my-document-created",
+      "operations": [
+        {
+          "indexType": "MyDocument",
+          "indexOperation": "UPSERT",
+          "uri": "${my.service.resource.base-uri}",
+          "referenceProvider": "com.example.indexwriter.MyDocumentReferenceProvider",
+          "condition": "com.example.indexwriter.MyDocumentActiveCondition",
+          "featureFlag": "MY_DOCUMENT_INDEXING"
+        }
+      ]
+    },
+    {
+      "messageName": "MyDocumentDeletedEvent",
+      "topicName": "my-document-deleted",
+      "operations": [
+        {
+          "indexType": "MyDocument",
+          "indexOperation": "DELETE",
+          "uri": "${my.service.resource.base-uri}",
+          "referenceProvider": "com.example.indexwriter.MyDocumentReferenceProvider"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Message fields:**
+
+| Field         | Required | Description                                                       |
+|---------------|----------|-------------------------------------------------------------------|
+| `messageName` | ✅        | Simple class name of the Avro-generated message type.             |
+| `topicName`   | ✅        | Kafka topic the message is consumed from.                         |
+| `operations`  | ✅        | One or more index operations to execute when the message arrives. |
+
+**Operation fields:**
+
+| Field               | Required | Description                                                                                                                                           |
+|---------------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `indexType`         | ✅        | Name of the target IndexType (must match a registered `IndexTypeDescriptor`).                                                                         |
+| `indexOperation`    | ✅        | `UPSERT` or `DELETE` (case-insensitive).                                                                                                              |
+| `uri`               | ✅        | URI of the SearchItem Provider endpoint. Spring property placeholders (`${...}`) are resolved at startup.                                             |
+| `referenceProvider` | ✅        | Fully qualified class name of the Spring bean implementing `ReferenceProvider`, e.g. `com.example.indexwriter.MyDocumentReferenceProvider`.           |
+| `condition`         | ❌        | Fully qualified class name of the Spring bean implementing `IndexingCondition`. The operation is skipped when the condition evaluates to `false`.     |
+| `featureFlag`       | ❌        | Name of a jEAP feature flag. The operation is skipped when the flag is inactive.                                                                      |
 
 ## Consumer Contract Enforcement
 

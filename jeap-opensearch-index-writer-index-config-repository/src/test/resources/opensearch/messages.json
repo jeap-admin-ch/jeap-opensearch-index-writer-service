@@ -8,8 +8,8 @@
           "indexType": "PreziusRegistration",
           "indexOperation": "UPSERT",
           "uri": "https://prezius/api/v1/registrations/{id}",
-          "referenceProvider": "PreziusRegistrationReferenceProvider",
-          "condition": "PreziusRegistrationIsActiveCondition",
+          "referenceProvider": "ch.admin.bit.prezius.PreziusRegistrationReferenceProvider",
+          "condition": "ch.admin.bit.prezius.PreziusRegistrationIsActiveCondition",
           "featureFlag": "PREZIUS_REGISTRATION_INDEXING"
         }
       ]
@@ -22,7 +22,7 @@
           "indexType": "PreziusRegistration",
           "indexOperation": "delete",
           "uri": "https://prezius/api/v1/registrations/{id}",
-          "referenceProvider": "PreziusRegistrationReferenceProvider"
+          "referenceProvider": "ch.admin.bit.prezius.PreziusRegistrationReferenceProvider"
         }
       ]
     }

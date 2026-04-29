@@ -8,33 +8,33 @@
           "indexType": "TestDocument",
           "indexOperation": "UPSERT",
           "uri": "${test.wiremock.base-url}",
-          "referenceProvider": "ITReferenceProvider"
+          "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider"
         },
         {
           "indexType": "TestDocument",
           "indexOperation": "DELETE",
           "uri": "${test.wiremock.base-url}",
-          "referenceProvider": "ITReferenceProvider"
+          "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider"
         },
         {
           "indexType": "TestDocumentTrueCondition",
           "indexOperation": "UPSERT",
           "uri": "${test.wiremock.base-url}",
-          "referenceProvider": "ITReferenceProvider",
-          "condition": "ITAlwaysTrueCondition"
+          "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider",
+          "condition": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITAlwaysTrueCondition"
         },
         {
           "indexType": "TestDocumentFalseCondition",
           "indexOperation": "UPSERT",
           "uri": "${test.wiremock.base-url}",
-          "referenceProvider": "ITReferenceProvider",
-          "condition": "ITAlwaysFalseCondition"
+          "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider",
+          "condition": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITAlwaysFalseCondition"
         },
         {
           "indexType": "TestDocumentFeatureFlag",
           "indexOperation": "UPSERT",
           "uri": "${test.wiremock.base-url}",
-          "referenceProvider": "ITReferenceProvider",
+          "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider",
           "featureFlag": "IT_FEATURE_FLAG_INDEXING"
         }
       ]

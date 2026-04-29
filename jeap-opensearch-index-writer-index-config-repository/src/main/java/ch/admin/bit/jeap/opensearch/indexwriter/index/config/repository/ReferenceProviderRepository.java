@@ -19,7 +19,7 @@ public class ReferenceProviderRepository {
 
     public ReferenceProviderRepository(List<ReferenceProvider<Message>> referenceProviders) {
         this.referenceProvidersByName = referenceProviders.stream()
-                .collect(toMap(c -> c.getClass().getSimpleName(), c -> c));
+                .collect(toMap(c -> c.getClass().getName(), c -> c));
         log.info("Loaded {} reference provider(s): {}", referenceProviders.size(), referenceProvidersByName.keySet());
     }
 

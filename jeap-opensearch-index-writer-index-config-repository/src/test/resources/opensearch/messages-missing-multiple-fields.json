@@ -6,7 +6,7 @@
       "operations": [
         {
           "indexOperation": "UPSERT",
-          "referenceProvider": "PreziusRegistrationReferenceProvider"
+          "referenceProvider": "ch.admin.bit.prezius.PreziusRegistrationReferenceProvider"
         }
       ]
     }

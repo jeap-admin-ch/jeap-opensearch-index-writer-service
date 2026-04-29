@@ -19,7 +19,7 @@ public class IndexingConditionRepository {
 
     public IndexingConditionRepository(List<IndexingCondition<Message>> indexingConditions) {
         this.conditionsByName = indexingConditions.stream()
-                .collect(toMap(c -> c.getClass().getSimpleName(), c -> c));
+                .collect(toMap(c -> c.getClass().getName(), c -> c));
         log.info("Loaded {} indexing condition(s): {}", indexingConditions.size(), conditionsByName.keySet());
     }
 

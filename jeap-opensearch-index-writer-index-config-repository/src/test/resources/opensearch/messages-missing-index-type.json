@@ -7,7 +7,7 @@
         {
           "indexOperation": "UPSERT",
           "uri": "https://prezius/api/v1/registrations/{id}",
-          "referenceProvider": "PreziusRegistrationReferenceProvider"
+          "referenceProvider": "ch.admin.bit.prezius.PreziusRegistrationReferenceProvider"
         }
       ]
     }
