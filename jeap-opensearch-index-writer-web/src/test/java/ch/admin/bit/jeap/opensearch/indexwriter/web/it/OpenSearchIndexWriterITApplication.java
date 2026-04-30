@@ -4,6 +4,6 @@ import ch.admin.bit.jeap.messaging.annotations.JeapMessageConsumerContractsByTem
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@JeapMessageConsumerContractsByTemplates(appName = "jeap-opensearch-index-writer-it", templatesPath = "opensearch")
+@JeapMessageConsumerContractsByTemplates(appName = "jeap-opensearch-index-writer-it")
 class OpenSearchIndexWriterITApplication {
 }

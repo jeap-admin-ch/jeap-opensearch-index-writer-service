@@ -4,6 +4,8 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.MessageOpe
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.exception.IndexWriterException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.OriginReference;
 
+import java.util.List;
+
 public class IndexingException extends IndexWriterException {
 
     private IndexingException(String message, boolean retryable) {
@@ -32,5 +34,19 @@ public class IndexingException extends IndexWriterException {
 
     public static IndexingException searchItemProviderNotReachable(String baseUri, String indexType, Throwable cause) {
         return new IndexingException("Search item provider not reachable at baseUri='" + baseUri + "' indexType='" + indexType + "'", true, cause);
+    }
+
+    public static IndexingException missingRequiredFields(String indexWriteAlias, String documentId, List<String> missingFields) {
+        return new IndexingException("Document '%s' for index alias '%s' is missing required fields: %s".formatted(documentId, indexWriteAlias, missingFields), false);
+    }
+
+    public static IndexingException missingResponseHeader(String headerName) {
+        return new IndexingException("Missing required response header '%s'".formatted(headerName), false);
+    }
+
+    public static IndexingException dataDeserializationFailed(Class<?> dataClass, String indexType, Throwable cause) {
+        return new IndexingException(
+                "Failed to deserialize data into '%s' for index type '%s'. Ensure the resource service returns field names matching the data class."
+                        .formatted(dataClass.getSimpleName(), indexType), false, cause);
     }
 }

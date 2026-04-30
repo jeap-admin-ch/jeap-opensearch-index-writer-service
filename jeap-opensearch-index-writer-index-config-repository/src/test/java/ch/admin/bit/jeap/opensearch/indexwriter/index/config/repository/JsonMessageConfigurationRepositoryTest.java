@@ -46,7 +46,7 @@ class JsonMessageConfigurationRepositoryTest {
                 .thenReturn(registrationReferenceProvider);
 
         repository = new JsonMessageConfigurationRepository(indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                new IndexConfigRepositoryProperties());
+                "classpath:/opensearch/messages.json");
         repository.load();
     }
 
@@ -94,7 +94,6 @@ class JsonMessageConfigurationRepositoryTest {
 
     @Test
     void indexOperationIsCaseInsensitive() {
-        // The DELETE message uses lowercase "delete" in the JSON fixture
         assertThat(repository.findByName("PreziusRegistrationDeleted"))
                 .isPresent()
                 .map(c -> c.operations().getFirst().indexOperation())
@@ -103,11 +102,9 @@ class JsonMessageConfigurationRepositoryTest {
 
     @Test
     void failsToStartWhenNoFileOnClasspath() {
-        var properties = new IndexConfigRepositoryProperties();
-        properties.setMessagesLocation("classpath:/opensearch/nonexistent.json");
         JsonMessageConfigurationRepository repo = new JsonMessageConfigurationRepository(
                 indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                properties);
+                "classpath:/opensearch/nonexistent.json");
 
         assertThatThrownBy(() -> repo.load("classpath:/opensearch/nonexistent.json"))
                 .isInstanceOf(ConfigurationException.class)
@@ -118,7 +115,7 @@ class JsonMessageConfigurationRepositoryTest {
     void failsToLoadWhenIndexTypeIsMissing() {
         JsonMessageConfigurationRepository repo = new JsonMessageConfigurationRepository(
                 indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                new IndexConfigRepositoryProperties());
+                "classpath:/opensearch/messages.json");
 
         assertThatThrownBy(() -> repo.load("classpath:/opensearch/messages-missing-index-type.json"))
                 .isInstanceOf(ConfigurationException.class)
@@ -130,7 +127,7 @@ class JsonMessageConfigurationRepositoryTest {
     void failsToLoadWhenIndexOperationIsMissing() {
         JsonMessageConfigurationRepository repo = new JsonMessageConfigurationRepository(
                 indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                new IndexConfigRepositoryProperties());
+                "classpath:/opensearch/messages-missing-index-operation.json");
 
         assertThatThrownBy(() -> repo.load("classpath:/opensearch/messages-missing-index-operation.json"))
                 .isInstanceOf(ConfigurationException.class)
@@ -142,7 +139,7 @@ class JsonMessageConfigurationRepositoryTest {
     void failsToLoadWhenUriIsMissing() {
         JsonMessageConfigurationRepository repo = new JsonMessageConfigurationRepository(
                 indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                new IndexConfigRepositoryProperties());
+                "classpath:/opensearch/messages-missing-uri.json");
 
         assertThatThrownBy(() -> repo.load("classpath:/opensearch/messages-missing-uri.json"))
                 .isInstanceOf(ConfigurationException.class)
@@ -154,7 +151,7 @@ class JsonMessageConfigurationRepositoryTest {
     void failsToLoadWhenReferenceProviderIsMissing() {
         JsonMessageConfigurationRepository repo = new JsonMessageConfigurationRepository(
                 indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                new IndexConfigRepositoryProperties());
+                "classpath:/opensearch/messages-missing-reference-provider.json");
 
         assertThatThrownBy(() -> repo.load("classpath:/opensearch/messages-missing-reference-provider.json"))
                 .isInstanceOf(ConfigurationException.class)
@@ -166,7 +163,7 @@ class JsonMessageConfigurationRepositoryTest {
     void failsToLoadWhenMultipleRequiredFieldsAreMissing() {
         JsonMessageConfigurationRepository repo = new JsonMessageConfigurationRepository(
                 indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
-                new IndexConfigRepositoryProperties());
+                "classpath:/opensearch/messages-missing-multiple-fields.json");
 
         assertThatThrownBy(() -> repo.load("classpath:/opensearch/messages-missing-multiple-fields.json"))
                 .isInstanceOf(ConfigurationException.class)

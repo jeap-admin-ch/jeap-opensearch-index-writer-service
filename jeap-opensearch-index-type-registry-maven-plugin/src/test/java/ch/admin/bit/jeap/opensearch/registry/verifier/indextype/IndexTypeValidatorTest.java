@@ -298,6 +298,34 @@ class IndexTypeValidatorTest {
         return IndexTypeValidator.validate(ctx);
     }
 
+    @Test
+    void camelCaseDataFieldNameFailsValidation(@TempDir File tempDir) throws IOException {
+        String mappingWithCamelCase = TestRegistryBuilder.VALID_MAPPING_V1_0.replace(
+                "\"document_id\"", "\"documentId\"");
+        File typeDir = typeDir(tempDir);
+        writeDescriptor(typeDir, INDEX_TYPE_NAME, TestRegistryBuilder.VALID_DESCRIPTOR);
+        writeMapping(typeDir, INDEX_TYPE_NAME, 1, 0, mappingWithCamelCase);
+
+        ValidationResult result = validate(tempDir, INDEX_TYPE_NAME);
+
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("documentId") && e.contains("snake_case"));
+    }
+
+    @Test
+    void camelCaseNestedDataFieldNameFailsValidation(@TempDir File tempDir) throws IOException {
+        String mappingWithCamelCase = TestRegistryBuilder.VALID_MAPPING_V1_0.replace(
+                "\"decree_reference\"", "\"decreeReference\"");
+        File typeDir = typeDir(tempDir);
+        writeDescriptor(typeDir, INDEX_TYPE_NAME, TestRegistryBuilder.VALID_DESCRIPTOR);
+        writeMapping(typeDir, INDEX_TYPE_NAME, 1, 0, mappingWithCamelCase);
+
+        ValidationResult result = validate(tempDir, INDEX_TYPE_NAME);
+
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("decreeReference") && e.contains("snake_case"));
+    }
+
     private void writeDescriptor(File dir, String typeName, String content) throws IOException {
         Files.writeString(new File(dir, typeName + ".json").toPath(), content);
     }

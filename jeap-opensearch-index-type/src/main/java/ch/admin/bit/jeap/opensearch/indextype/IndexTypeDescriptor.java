@@ -51,10 +51,17 @@ public interface IndexTypeDescriptor {
     }
 
     default String indexWriteAlias() {
-        return originType() + "_V" + majorVersion() + "_write";
+        return toSnakeCase(originType()) + "_v" + majorVersion() + "_write";
     }
 
     default String indexReadAlias() {
-        return originType() + "_read";
+        return toSnakeCase(originType()) + "_read";
+    }
+
+    private static String toSnakeCase(String name) {
+        return name
+                .replaceAll("([A-Z]+)([A-Z][a-z])", "$1_$2")
+                .replaceAll("([a-z\\d])([A-Z])", "$1_$2")
+                .toLowerCase();
     }
 }

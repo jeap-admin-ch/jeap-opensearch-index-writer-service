@@ -31,6 +31,7 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-index-type-repository - [ch.admin.bit.jeap:jeap-opensearch-index-writer-index-type-repository](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-index-type-repository)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-web - [ch.admin.bit.jeap:jeap-opensearch-index-writer-web](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-web)
  * ch.admin.bit.jeap:jeap-spring-boot-application-starter - [ch.admin.bit.jeap:jeap-spring-boot-application-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-application-starter)
+ * ch.admin.bit.jeap:jeap-spring-boot-config-aws-starter - [ch.admin.bit.jeap:jeap-spring-boot-config-aws-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-config-aws-starter/tree/main/jeap-spring-boot-config-aws-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-featureflag-starter - [ch.admin.bit.jeap:jeap-spring-boot-featureflag-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-featureflag-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-logging-starter - [ch.admin.bit.jeap:jeap-spring-boot-logging-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-logging-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-monitoring-starter - [ch.admin.bit.jeap:jeap-spring-boot-monitoring-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-monitoring-starter)
@@ -60,6 +61,9 @@ Apache License Version 2.0
  * jackson-module-scala - [com.fasterxml.jackson.module:jackson-module-scala_2.13](https://github.com/FasterXML/jackson-module-scala)
  * Woodstox - [com.fasterxml.woodstox:woodstox-core](https://github.com/FasterXML/woodstox)
  * Caffeine cache - [com.github.ben-manes.caffeine:caffeine](https://github.com/ben-manes/caffeine)
+ * docker-java-api - [com.github.docker-java:docker-java-api](https://github.com/docker-java/docker-java)
+ * docker-java-transport - [com.github.docker-java:docker-java-transport](https://github.com/docker-java/docker-java)
+ * docker-java-transport-zerodep - [com.github.docker-java:docker-java-transport-zerodep](https://github.com/docker-java/docker-java)
  * JCIP Annotations under Apache License - [com.github.stephenc.jcip:jcip-annotations](http://stephenc.github.com/jcip-annotations)
  * proto-google-common-protos - [com.google.api.grpc:proto-google-common-protos](https://github.com/googleapis/java-iam/proto-google-common-protos)
  * FindBugs-jsr305 - [com.google.code.findbugs:jsr305](http://findbugs.sourceforge.net/)
@@ -155,6 +159,7 @@ Apache License Version 2.0
  * Joda-Time - [joda-time:joda-time](http://www.joda.org/joda-time/)
  * Byte Buddy (without dependencies) - [net.bytebuddy:byte-buddy](https://bytebuddy.net/byte-buddy)
  * Byte Buddy agent - [net.bytebuddy:byte-buddy-agent](https://bytebuddy.net/byte-buddy-agent)
+ * Java Native Access - [net.java.dev.jna:jna](https://github.com/java-native-access/jna)
  * Logstash Logback Encoder - [net.logstash.logback:logstash-logback-encoder](https://github.com/logstash/logstash-logback-encoder)
  * Logstash Logback Encoder - [net.logstash.logback:logstash-logback-encoder](https://github.com/logfellow/logstash-logback-encoder)
  * ASM based accessors helper used by json-smart - [net.minidev:accessors-smart](https://urielch.github.io/)
@@ -166,6 +171,7 @@ Apache License Version 2.0
  * Apache Commons Lang - [org.apache.commons:commons-lang3](https://commons.apache.org/proper/commons-lang/)
  * Apache HttpClient - [org.apache.httpcomponents:httpclient](http://hc.apache.org/httpcomponents-client)
  * Apache HttpCore - [org.apache.httpcomponents:httpcore](http://hc.apache.org/httpcomponents-core-ga)
+ * Apache HttpClient - [org.apache.httpcomponents.client5:httpclient5](https://hc.apache.org/httpcomponents-client-5.4.x/5.4.4/httpclient5/)
  * Apache HttpClient - [org.apache.httpcomponents.client5:httpclient5](https://hc.apache.org/httpcomponents-client-5.5.x/5.5.2/httpclient5/)
  * Apache HttpComponents Core HTTP/1.1 - [org.apache.httpcomponents.core5:httpcore5](https://hc.apache.org/httpcomponents-core-5.3.x/5.3.6/httpcore5/)
  * Apache HttpComponents Core HTTP/2 - [org.apache.httpcomponents.core5:httpcore5-h2](https://hc.apache.org/httpcomponents-core-5.3.x/5.3.6/httpcore5-h2/)
@@ -231,6 +237,7 @@ Apache License Version 2.0
  * Javassist - [org.javassist:javassist](http://www.javassist.org/)
  * JBoss Logging 3 - [org.jboss.logging:jboss-logging](https://www.jboss.org)
  * IntelliJ IDEA Annotations - [org.jetbrains:annotations](http://www.jetbrains.org)
+ * JetBrains Java Annotations - [org.jetbrains:annotations](https://github.com/JetBrains/java-annotations)
  * Kotlin Reflect - [org.jetbrains.kotlin:kotlin-reflect](https://kotlinlang.org/)
  * Kotlin Script Runtime - [org.jetbrains.kotlin:kotlin-script-runtime](https://kotlinlang.org/)
  * Kotlin Scripting Common - [org.jetbrains.kotlin:kotlin-scripting-common](https://kotlinlang.org/)
@@ -288,6 +295,7 @@ Apache License Version 2.0
  * spring-boot-starter-web - [org.springframework.boot:spring-boot-starter-web](https://spring.io/projects/spring-boot)
  * spring-boot-test - [org.springframework.boot:spring-boot-test](https://spring.io/projects/spring-boot)
  * spring-boot-test-autoconfigure - [org.springframework.boot:spring-boot-test-autoconfigure](https://spring.io/projects/spring-boot)
+ * Spring Cloud Commons - [org.springframework.cloud:spring-cloud-commons](https://projects.spring.io/spring-cloud/spring-cloud-commons/)
  * Spring Cloud Context - [org.springframework.cloud:spring-cloud-context](https://projects.spring.io/spring-cloud/spring-cloud-context/)
  * Spring Kafka Support - [org.springframework.kafka:spring-kafka](https://github.com/spring-projects/spring-kafka)
  * Spring Kafka Test Support - [org.springframework.kafka:spring-kafka-test](https://github.com/spring-projects/spring-kafka)
@@ -312,6 +320,8 @@ Apache License Version 2.0
  * org.xmlunit:xmlunit-core - [org.xmlunit:xmlunit-core](https://www.xmlunit.org/)
  * SnakeYAML - [org.yaml:snakeyaml](https://bitbucket.org/snakeyaml/snakeyaml)
  * AWS Java SDK :: Annotations - [software.amazon.awssdk:annotations](https://aws.amazon.com/sdkforjava/core/annotations)
+ * AWS Java SDK :: Services :: AppConfig - [software.amazon.awssdk:appconfig](https://aws.amazon.com/sdkforjava)
+ * AWS Java SDK :: Services :: App Config Data - [software.amazon.awssdk:appconfigdata](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: Arns - [software.amazon.awssdk:arns](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: Auth - [software.amazon.awssdk:auth](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: AWS Core - [software.amazon.awssdk:aws-core](https://aws.amazon.com/sdkforjava)
@@ -336,6 +346,7 @@ Apache License Version 2.0
  * AWS Java SDK :: Retries API - [software.amazon.awssdk:retries-spi](https://aws.amazon.com/sdkforjava/core/retries-spi)
  * AWS Java SDK :: Services :: Roles Anywhere - [software.amazon.awssdk:rolesanywhere](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: SDK Core - [software.amazon.awssdk:sdk-core](https://aws.amazon.com/sdkforjava)
+ * AWS Java SDK :: Services :: AWS Secrets Manager - [software.amazon.awssdk:secretsmanager](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: Services :: SSO - [software.amazon.awssdk:sso](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: Services :: SSO OIDC - [software.amazon.awssdk:ssooidc](https://aws.amazon.com/sdkforjava)
  * AWS Java SDK :: Services :: AWS STS - [software.amazon.awssdk:sts](https://aws.amazon.com/sdkforjava)
@@ -446,6 +457,11 @@ LGPL 2.1
 
  * Javassist - [org.javassist:javassist](http://www.javassist.org/)
 
+LGPL-2.1-or-later
+-------------------------------
+
+ * Java Native Access - [net.java.dev.jna:jna](https://github.com/java-native-access/jna)
+
 MIT License
 -------------------------------
 
@@ -461,9 +477,12 @@ MIT License
  * PCollections - [org.pcollections:pcollections](https://github.com/hrldcpr/pcollections)
  * Project Lombok - [org.projectlombok:lombok](https://projectlombok.org)
  * reactive-streams - [org.reactivestreams:reactive-streams](http://www.reactive-streams.org/)
+ * Duct Tape - [org.rnorth.duct-tape:duct-tape](https://github.com/rnorth/duct-tape)
  * JUL to SLF4J bridge - [org.slf4j:jul-to-slf4j](http://www.slf4j.org)
  * SLF4J API Module - [org.slf4j:slf4j-api](http://www.slf4j.org)
  * SLF4J Simple Provider - [org.slf4j:slf4j-simple](http://www.slf4j.org)
+ * Testcontainers :: JUnit Jupiter Extension - [org.testcontainers:junit-jupiter](https://java.testcontainers.org)
+ * Testcontainers Core - [org.testcontainers:testcontainers](https://java.testcontainers.org)
  * webjars-locator-lite - [org.webjars:webjars-locator-lite](https://webjars.org)
 
 MPL 1.1

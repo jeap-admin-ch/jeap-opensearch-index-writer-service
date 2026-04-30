@@ -41,7 +41,7 @@ class JsonSerializationTest {
 
     @Test
     void originUsesBpIdFieldName() {
-        Origin origin = new Origin("id-1", "v1", "bp-42", Instant.EPOCH, Instant.EPOCH, null);
+        Origin origin = new Origin("id-1", "v1", "bp-42", null, Instant.EPOCH, Instant.EPOCH, null);
         JsonNode json = mapper.valueToTree(origin);
 
         assertThat(json.has("bp_id")).isTrue();
@@ -51,7 +51,7 @@ class JsonSerializationTest {
     @Test
     void enrichedSearchItemUsesSearchItemKey() {
         SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1);
-        Origin origin = new Origin("id-1", "v1", "bp-1", Instant.EPOCH, Instant.EPOCH, null);
+        Origin origin = new Origin("id-1", "v1", "bp-1", null, Instant.EPOCH, Instant.EPOCH, null);
         SearchItemIndexed<String> enriched = new SearchItemIndexed<>(meta, origin, "payload");
 
         JsonNode json = mapper.valueToTree(enriched);
@@ -64,7 +64,7 @@ class JsonSerializationTest {
     @Test
     void enrichedSearchItemRoundTrips() throws Exception {
         SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1);
-        Origin origin = new Origin("id-rt", "v2", "bp-rt", Instant.EPOCH, Instant.EPOCH, null);
+        Origin origin = new Origin("id-rt", "v2", "bp-rt", null, Instant.EPOCH, Instant.EPOCH, null);
         SearchItemIndexed<String> original = new SearchItemIndexed<>(meta, origin, "data");
 
         String json = mapper.writeValueAsString(original);
@@ -80,7 +80,7 @@ class JsonSerializationTest {
 
     @Test
     void originRoundTrips() throws Exception {
-        Origin original = new Origin("o-id", "v3", "bp-99", Instant.EPOCH, Instant.EPOCH, null);
+        Origin original = new Origin("o-id", "v3", "bp-99", null, Instant.EPOCH, Instant.EPOCH, null);
 
         String json = mapper.writeValueAsString(original);
         Origin deserialized = mapper.readValue(json, Origin.class);

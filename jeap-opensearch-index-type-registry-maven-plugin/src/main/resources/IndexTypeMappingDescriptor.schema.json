@@ -3,44 +3,85 @@
   "title": "OpenSearch Mapping File",
   "description": "JSON schema for validating OpenSearch mapping files in the Index Type Registry.",
   "type": "object",
-  "required": ["mappings"],
+  "required": [
+    "mappings"
+  ],
   "properties": {
     "mappings": {
       "type": "object",
-      "required": ["dynamic", "properties"],
+      "required": [
+        "dynamic",
+        "properties"
+      ],
       "properties": {
         "dynamic": {
           "type": "boolean",
-          "enum": [false],
+          "enum": [
+            false
+          ],
           "description": "Must be false. Additional fields in the document are ignored."
         },
         "properties": {
           "type": "object",
-          "required": ["search_item", "origin", "data"],
+          "required": [
+            "search_item",
+            "origin",
+            "data"
+          ],
           "properties": {
             "search_item": {
               "type": "object",
               "description": "Metadata about the indexed entry. Written by the jEAP IndexWriterService.",
-              "required": ["properties"],
+              "required": [
+                "properties"
+              ],
               "properties": {
-                "type": { "type": "string", "enum": ["object"] },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "object"
+                  ]
+                },
                 "properties": {
                   "type": "object",
-                  "required": ["upserted_at", "minor_version"],
+                  "required": [
+                    "upserted_at",
+                    "minor_version"
+                  ],
                   "properties": {
                     "upserted_at": {
                       "type": "object",
-                      "required": ["type", "format"],
+                      "required": [
+                        "type",
+                        "format"
+                      ],
                       "properties": {
-                        "type":   { "type": "string", "enum": ["date"] },
-                        "format": { "type": "string", "enum": ["strict_date_optional_time||epoch_millis"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "date"
+                          ]
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "strict_date_optional_time||epoch_millis"
+                          ]
+                        }
                       }
                     },
                     "minor_version": {
                       "type": "object",
-                      "required": ["type"],
+                      "required": [
+                        "type"
+                      ],
                       "properties": {
-                        "type": { "type": "string", "enum": ["integer"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "integer"
+                          ]
+                        }
                       }
                     }
                   }
@@ -50,56 +91,139 @@
             "origin": {
               "type": "object",
               "description": "Reference back to the origin business object. Written by the jEAP IndexWriterService.",
-              "required": ["properties"],
+              "required": [
+                "properties"
+              ],
               "properties": {
-                "type": { "type": "string", "enum": ["object"] },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "object"
+                  ]
+                },
                 "properties": {
                   "type": "object",
-                  "required": ["id", "version", "bp_id", "created", "modified", "reference"],
+                  "required": [
+                    "id"
+                  ],
                   "properties": {
                     "id": {
                       "type": "object",
-                      "required": ["type"],
+                      "required": [
+                        "type"
+                      ],
                       "properties": {
-                        "type": { "type": "string", "enum": ["keyword"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "keyword"
+                          ]
+                        }
                       }
                     },
                     "version": {
                       "type": "object",
-                      "required": ["type"],
+                      "required": [
+                        "type"
+                      ],
                       "properties": {
-                        "type": { "type": "string", "enum": ["keyword"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "keyword"
+                          ]
+                        }
                       }
                     },
                     "bp_id": {
                       "type": "object",
-                      "required": ["type"],
+                      "required": [
+                        "type"
+                      ],
                       "properties": {
-                        "type": { "type": "string", "enum": ["keyword"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "keyword"
+                          ]
+                        }
+                      }
+                    },
+                    "tenant": {
+                      "type": "object",
+                      "required": [
+                        "type"
+                      ],
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "keyword"
+                          ]
+                        }
                       }
                     },
                     "created": {
                       "type": "object",
-                      "required": ["type", "format"],
+                      "required": [
+                        "type",
+                        "format"
+                      ],
                       "properties": {
-                        "type":   { "type": "string", "enum": ["date"] },
-                        "format": { "type": "string", "enum": ["strict_date_optional_time||epoch_millis"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "date"
+                          ]
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "strict_date_optional_time||epoch_millis"
+                          ]
+                        }
                       }
                     },
                     "modified": {
                       "type": "object",
-                      "required": ["type", "format"],
+                      "required": [
+                        "type",
+                        "format"
+                      ],
                       "properties": {
-                        "type":   { "type": "string", "enum": ["date"] },
-                        "format": { "type": "string", "enum": ["strict_date_optional_time||epoch_millis"] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "date"
+                          ]
+                        },
+                        "format": {
+                          "type": "string",
+                          "enum": [
+                            "strict_date_optional_time||epoch_millis"
+                          ]
+                        }
                       }
                     },
                     "reference": {
                       "type": "object",
-                      "required": ["type", "enabled"],
+                      "required": [
+                        "type",
+                        "enabled"
+                      ],
                       "properties": {
-                        "type":    { "type": "string", "enum": ["object"] },
-                        "enabled": { "type": "boolean", "enum": [false] }
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "object"
+                          ]
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        }
                       }
                     }
                   }

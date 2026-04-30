@@ -10,6 +10,7 @@ import java.time.Instant;
  * @param id id of the business object
  * @param version version of the business object
  * @param bpId business partner id
+ * @param tenant tenant of the business object
  * @param created creation timestamp of the business object
  * @param modified modified timestamp of the business object
  * @param reference deep link to the business object
@@ -17,6 +18,7 @@ import java.time.Instant;
 public record Origin(String id,
                      String version,
                      @JsonProperty("bp_id") String bpId,
+                     String tenant,
                      Instant created,
                      Instant modified,
                      JsonNode reference

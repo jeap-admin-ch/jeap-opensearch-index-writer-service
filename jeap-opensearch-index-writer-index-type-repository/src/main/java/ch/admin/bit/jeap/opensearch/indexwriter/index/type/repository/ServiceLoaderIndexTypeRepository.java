@@ -1,7 +1,6 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.index.type.repository;
 
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
-import ch.admin.bit.jeap.opensearch.indextype.IndexTypeDescriptor;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.ConfigurationException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indextype.IndexTypeRepository;
 import jakarta.annotation.PostConstruct;
@@ -16,7 +15,7 @@ import java.util.Optional;
 @Slf4j
 class ServiceLoaderIndexTypeRepository implements IndexTypeRepository {
 
-    private List<IndexTypeDescriptor> indexTypes;
+    private List<IndexType<?>> indexTypes;
 
     @PostConstruct
     void load() {
@@ -33,19 +32,21 @@ class ServiceLoaderIndexTypeRepository implements IndexTypeRepository {
     }
 
     @Override
-    public List<IndexTypeDescriptor> getAll() {
+    @SuppressWarnings("java:S1452")
+    public List<IndexType<?>> getAll() {
         return indexTypes;
     }
 
     @Override
-    public Optional<IndexTypeDescriptor> findByOriginTypeAndMajorVersion(String originType, int majorVersion) {
-        List<IndexTypeDescriptor> matches = indexTypes.stream()
+    @SuppressWarnings("java:S1452")
+    public Optional<IndexType<?>> findByOriginTypeAndMajorVersion(String originType, int majorVersion) {
+        List<IndexType<?>> matches = indexTypes.stream()
                 .filter(it -> it.originType().equals(originType) && it.majorVersion() == majorVersion)
                 .toList();
         if (matches.size() > 1) {
             log.warn("Multiple IndexType implementations found for originType='{}' majorVersion={} — using highest minorVersion",
                     originType, majorVersion);
-            return matches.stream().max(Comparator.comparingInt(IndexTypeDescriptor::minorVersion));
+            return matches.stream().max(Comparator.comparingInt(IndexType::minorVersion));
         }
         return matches.stream().findFirst();
     }

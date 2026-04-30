@@ -6,7 +6,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.function.Supplier;
 
-public class ITTestIndexTypeTrueCondition implements IndexType<Object> {
+public class ITTestIndexTypeTrueCondition implements IndexType<ITTestIndexTypeData> {
 
     @Override
     public String system() {
@@ -44,12 +44,12 @@ public class ITTestIndexTypeTrueCondition implements IndexType<Object> {
     }
 
     @Override
-    public Class<Object> dataClass() {
-        return Object.class;
+    public Class<ITTestIndexTypeData> dataClass() {
+        return ITTestIndexTypeData.class;
     }
 
     @Override
     public Supplier<InputStream> mappingDefinition() {
-        return InputStream::nullInputStream;
+        return () -> getClass().getResourceAsStream("/it-test-index-mapping.json");
     }
 }

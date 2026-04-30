@@ -13,7 +13,11 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.function.Supplier;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class IndexMappingUpdaterTest {
@@ -45,7 +49,7 @@ class IndexMappingUpdaterTest {
 
         indexMappingUpdater.updateIndexMapping();
 
-        verify(indexWriter).ensureIndexReady("my-index-write", 3, mappingDefinition);
+        verify(indexWriter).ensureIndexReady("my-index-write", "my-index-read", 3, mappingDefinition);
         verifyNoMoreInteractions(indexWriter);
     }
 
@@ -60,8 +64,8 @@ class IndexMappingUpdaterTest {
 
         indexMappingUpdater.updateIndexMapping();
 
-        verify(indexWriter).ensureIndexReady("index-one-write", 1, mapping1);
-        verify(indexWriter).ensureIndexReady("index-two-write", 2, mapping2);
+        verify(indexWriter).ensureIndexReady("index-one-write", "index-one-read", 1, mapping1);
+        verify(indexWriter).ensureIndexReady("index-two-write", "index-two-read", 2, mapping2);
         verifyNoMoreInteractions(indexWriter);
     }
 
@@ -69,6 +73,7 @@ class IndexMappingUpdaterTest {
     private static IndexType stubIndexType(String writeAlias, int minorVersion, Supplier<InputStream> mappingDefinition) {
         IndexType indexType = mock(IndexType.class);
         when(indexType.indexWriteAlias()).thenReturn(writeAlias);
+        when(indexType.indexReadAlias()).thenReturn(writeAlias.replace("-write", "-read"));
         when(indexType.minorVersion()).thenReturn(minorVersion);
         when(indexType.mappingDefinition()).thenReturn(mappingDefinition);
         return indexType;

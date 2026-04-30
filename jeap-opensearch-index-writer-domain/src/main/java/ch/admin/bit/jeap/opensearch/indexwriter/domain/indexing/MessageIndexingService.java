@@ -1,7 +1,8 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing;
 
 import ch.admin.bit.jeap.messaging.model.Message;
-import ch.admin.bit.jeap.opensearch.indextype.IndexTypeDescriptor;
+import ch.admin.bit.jeap.opensearch.indextype.IndexType;
+import ch.admin.bit.jeap.opensearch.indextype.SearchItem;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemMetadata;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indextype.IndexTypeRepository;
@@ -9,6 +10,7 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.MessageOpe
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.OriginReference;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.ReferenceProvider;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,8 @@ import org.togglz.core.manager.FeatureManager;
 import org.togglz.core.util.NamedFeature;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +35,7 @@ public class MessageIndexingService {
     private final IndexTypeRepository indexTypeRepository;
     private final IndexWriter indexWriter;
     private final MeterRegistry meterRegistry;
+    private final ObjectMapper objectMapper;
 
     public void index(Message message, MessageOperationConfig operation) {
         Timer.Sample sample = Timer.start(meterRegistry);
@@ -58,20 +63,55 @@ public class MessageIndexingService {
                 () -> IndexingException.searchItemNotFound(operation, originReference)
         );
 
-        IndexTypeDescriptor indexTypeDescriptor = indexTypeRepository.findByOriginTypeAndMajorVersion(operation.indexType(), searchItemResult.indexMajorVersion())
+        IndexType<?> indexType = indexTypeRepository.findByOriginTypeAndMajorVersion(operation.indexType(), searchItemResult.indexMajorVersion())
                 .orElseThrow(() -> IndexingException.indexTypeNotFound(operation.indexType(), searchItemResult.indexMajorVersion()));
 
         switch (operation.indexOperation()) {
-            case UPSERT -> upsert(indexTypeDescriptor, originReference, searchItemResult);
-            case DELETE -> indexWriter.deleteSearchItem(indexTypeDescriptor.indexWriteAlias(), originReference.id());
+            case UPSERT -> upsert(indexType, originReference, searchItemResult);
+            case DELETE -> indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id());
         }
     }
 
-    private void upsert(IndexTypeDescriptor indexType, OriginReference originReference, SearchItemResult searchItemResult) {
+    private void upsert(IndexType<?> indexType, OriginReference originReference, SearchItemResult searchItemResult) {
         SearchItemMetadata metadata = new SearchItemMetadata(Instant.now(), searchItemResult.indexMinorVersion());
-        SearchItemIndexed<?> searchItemIndexed = searchItemResult.searchItem().withMetadata(metadata);
+        SearchItemIndexed<?> searchItemIndexed = toSearchItemIndexed(searchItemResult, indexType, metadata);
 
+        validateRequiredFields(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed);
         indexWriter.upsertSearchItem(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed);
+    }
+
+    /**
+     * Converts the raw {@link SearchItemResult} to a {@link SearchItemIndexed} by deserializing the data
+     * into the typed {@code dataClass} defined by the {@link IndexType}.
+     * <p>
+     * The raw JSON data is deserialized into the typed instance using Jackson annotations on the data class
+     * (e.g. {@code @JsonProperty}), so field names in OpenSearch match the annotation-defined names.
+     *
+     * @throws IndexingException if the raw JSON data cannot be deserialized into the typed data class
+     */
+    private <T> SearchItemIndexed<T> toSearchItemIndexed(SearchItemResult result, IndexType<T> indexType, SearchItemMetadata metadata) {
+        Class<T> dataClass = indexType.dataClass();
+        try {
+            T typedData = objectMapper.convertValue(result.searchItem().data(), dataClass);
+            return new SearchItem<>(result.searchItem().origin(), typedData).withMetadata(metadata);
+        } catch (IllegalArgumentException e) {
+            throw IndexingException.dataDeserializationFailed(dataClass, indexType.originType(), e);
+        }
+    }
+
+    private void validateRequiredFields(String indexWriteAlias, String documentId, SearchItemIndexed<?> searchItem) {
+        List<String> missing = new ArrayList<>();
+        if (searchItem.origin() == null) {
+            missing.add("origin");
+        } else {
+            var origin = searchItem.origin();
+            if (origin.id() == null) {
+                missing.add("origin.id");
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw IndexingException.missingRequiredFields(indexWriteAlias, documentId, missing);
+        }
     }
 
     private boolean shouldProcessIndexing(Message message, MessageOperationConfig operation) {

@@ -176,6 +176,7 @@ The `registry` goal enforces the following rules on every build:
 ### Schema Validation
 - Every descriptor file is validated against `IndexTypeDescriptor.schema.json`
 - Every mapping file is validated against `IndexTypeMappingDescriptor.schema.json`
+- All field names in `data.properties` (recursively, including nested objects) must be **snake_case** — matching `[a-z][a-z0-9]*(_[a-z0-9]+)*`. The index writer service serialises documents with `PropertyNamingStrategies.SNAKE_CASE`; a camelCase field name in the mapping would never match the data actually written to OpenSearch.
 
 ### Immutability (compared to trunk branch)
 - No system directory may be deleted

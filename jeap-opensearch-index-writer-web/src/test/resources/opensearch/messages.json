@@ -11,7 +11,7 @@
           "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider"
         },
         {
-          "indexType": "TestDocument",
+          "indexType": "TestDocumentDelete",
           "indexOperation": "DELETE",
           "uri": "${test.wiremock.base-url}",
           "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider"

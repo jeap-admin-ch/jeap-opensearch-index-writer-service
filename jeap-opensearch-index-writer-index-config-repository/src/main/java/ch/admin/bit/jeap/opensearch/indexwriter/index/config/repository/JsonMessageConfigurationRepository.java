@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -20,11 +21,11 @@ import org.springframework.stereotype.Repository;
 import java.io.IOException;
 import java.util.*;
 
-import static java.util.stream.Collectors.toMap;
-
 @Repository
 @Slf4j
 public class JsonMessageConfigurationRepository implements MessageConfigurationRepository {
+
+    public static final String OPENSEARCH_MESSAGES_JSON = "classpath:/opensearch/messages.json";
 
     private static final JsonMapper JSON_MAPPER = JsonMapper.builder()
             .enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS)
@@ -38,15 +39,24 @@ public class JsonMessageConfigurationRepository implements MessageConfigurationR
 
     private final Map<String, MessageConfig> messagesByName = new HashMap<>();
 
+    @Autowired
     JsonMessageConfigurationRepository(
             IndexingConditionRepository indexingConditionRepository,
             ReferenceProviderRepository referenceProviderRepository,
+            Environment environment) {
+        this(indexingConditionRepository, referenceProviderRepository, environment, OPENSEARCH_MESSAGES_JSON);
+    }
+
+    // for testing
+    protected JsonMessageConfigurationRepository(
+            IndexingConditionRepository indexingConditionRepository,
+            ReferenceProviderRepository referenceProviderRepository,
             Environment environment,
-            IndexConfigRepositoryProperties properties) {
+            String messagesLocation) {
         this.indexingConditionRepository = indexingConditionRepository;
         this.referenceProviderRepository = referenceProviderRepository;
         this.environment = environment;
-        this.messagesLocation = properties.getMessagesLocation();
+        this.messagesLocation = messagesLocation;
     }
 
     @Override

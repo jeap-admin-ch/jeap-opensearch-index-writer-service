@@ -120,9 +120,10 @@ public class IndexTypeValidator {
 
             File mappingFile = new File(validationContext.getIndexTypeDir(), mappingDefinition);
             result = ValidationResult.merge(result,
-                    validateMappingFileExists(mappingFile, mappingDefinition),
+                    validateMappingFileExists(mappingFile),
                     validateMappingFileName(mappingFile, major, minor),
-                    IndexTypeMappingSchemaValidator.validate(validationContext, mappingFile));
+                    IndexTypeMappingSchemaValidator.validate(validationContext, mappingFile),
+                    MappingDataFieldNamingValidator.validate(mappingFile));
 
             versionRefs.add(new MappingVersionCompatibilityValidator.MappingVersionRef(major, minor, mappingDefinition));
         }
@@ -190,7 +191,7 @@ public class IndexTypeValidator {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
-    private ValidationResult validateMappingFileExists(File mappingFile, String mappingDefinition) {
+    private ValidationResult validateMappingFileExists(File mappingFile) {
         if (!mappingFile.exists()) {
             return ValidationResult.fail("Mapping file '%s' referenced in descriptor does not exist"
                     .formatted(mappingFile.getAbsolutePath()));

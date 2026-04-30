@@ -77,7 +77,7 @@ class HttpSearchItemProvider implements SearchItemProvider {
     private int parseIntHeader(HttpHeaders headers, String headerName) {
         String value = headers.getFirst(headerName);
         if (value == null) {
-            throw new IllegalStateException("Missing required response header: " + headerName);
+            throw IndexingException.missingResponseHeader(headerName);
         }
         return Integer.parseInt(value);
     }

@@ -4,6 +4,7 @@ import ch.admin.bit.jeap.domainevent.avro.AvroDomainEventBuilder;
 import ch.admin.bit.jeap.messaging.kafka.contract.ContractsValidator;
 import ch.admin.bit.jeap.messaging.kafka.test.KafkaIntegrationTestBase;
 import ch.admin.bit.jeap.opensearch.indexwriter.adapter.kafka.KafkaIndexWriterConsumerFactory;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import ch.admin.bit.jme.declaration.DeclarationPayload;
 import ch.admin.bit.jme.declaration.DeclarationReferences;
 import ch.admin.bit.jme.declaration.JmeDeclarationCreatedEvent;
@@ -62,6 +63,10 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
 
     @Autowired
     private TestRestTemplate restTemplate;
+
+    @MockitoBean
+    @SuppressWarnings("unused")
+    private IndexWriter indexWriter;
 
     @MockitoBean
     @SuppressWarnings("unused")

@@ -49,6 +49,6 @@ class SearchItemTest {
     }
 
     private static Origin origin(String id) {
-        return new Origin(id, "v1", "bp-1", Instant.EPOCH, Instant.EPOCH, null);
+        return new Origin(id, "v1", "bp-1", null, Instant.EPOCH, Instant.EPOCH, null);
     }
 }

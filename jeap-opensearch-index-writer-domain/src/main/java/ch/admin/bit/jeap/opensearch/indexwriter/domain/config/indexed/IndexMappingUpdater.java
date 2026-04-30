@@ -1,6 +1,6 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indexed;
 
-import ch.admin.bit.jeap.opensearch.indextype.IndexTypeDescriptor;
+import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indextype.IndexTypeRepository;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import jakarta.annotation.PostConstruct;
@@ -18,9 +18,9 @@ public class IndexMappingUpdater {
 
     @PostConstruct
     void updateIndexMapping() {
-        List<IndexTypeDescriptor> all = indexTypeRepository.getAll();
-        for (IndexTypeDescriptor indexType : all) {
-            indexWriter.ensureIndexReady(indexType.indexWriteAlias(), indexType.minorVersion(), indexType.mappingDefinition());
+        List<IndexType<?>> all = indexTypeRepository.getAll();
+        for (IndexType<?> indexType : all) {
+            indexWriter.ensureIndexReady(indexType.indexWriteAlias(), indexType.indexReadAlias(), indexType.minorVersion(), indexType.mappingDefinition());
         }
     }
 }

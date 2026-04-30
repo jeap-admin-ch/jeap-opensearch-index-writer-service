@@ -19,13 +19,20 @@ class IndexTypeDefaultMethodsTest {
     @Test
     void indexWriteAliasIncludesMajorVersion() {
         IndexType<Object> type = indexType("JmeDecreeDocument", 1, 0);
-        assertThat(type.indexWriteAlias()).isEqualTo("JmeDecreeDocument_V1_write");
+        assertThat(type.indexWriteAlias()).isEqualTo("jme_decree_document_v1_write");
+    }
+
+    @Test
+    void indexWriteAliasConvertsOriginTypeToPascalCase() {
+        assertThat(indexType("orderItem", 2, 0).indexWriteAlias()).isEqualTo("order_item_v2_write");
+        assertThat(indexType("MySearchIndex", 1, 0).indexWriteAlias()).isEqualTo("my_search_index_v1_write");
+        assertThat(indexType("already_snake", 1, 0).indexWriteAlias()).isEqualTo("already_snake_v1_write");
     }
 
     @Test
     void indexReadAliasIsOriginTypeWithReadSuffix() {
         IndexType<Object> type = indexType("JmeDecreeDocument", 1, 0);
-        assertThat(type.indexReadAlias()).isEqualTo("JmeDecreeDocument_read");
+        assertThat(type.indexReadAlias()).isEqualTo("jme_decree_document_read");
     }
 
     @Test

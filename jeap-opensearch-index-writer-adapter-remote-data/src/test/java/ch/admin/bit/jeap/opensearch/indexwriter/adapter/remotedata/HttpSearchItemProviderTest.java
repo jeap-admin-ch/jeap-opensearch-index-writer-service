@@ -85,6 +85,36 @@ class HttpSearchItemProviderTest {
     }
 
     @Test
+    void throwsNonRetryableIndexingException_whenMajorVersionHeaderMissing() {
+        server.expect(requestTo(BASE_URI + "/index-api/searchitems?index_type=PreziusRegistration&origin_id=reg-42"))
+                .andRespond(withSuccess("""
+                        {"origin":{"id":"reg-42","version":null,"bp_id":null,"created":null,"modified":null,"reference":null},"data":{}}
+                        """, MediaType.APPLICATION_JSON)
+                        .header("index-minor-version", "3"));
+
+        OriginReference ref = new OriginReference(INDEX_TYPE, ORIGIN_ID, null);
+        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref))
+                .isInstanceOf(IndexingException.class)
+                .matches(e -> !((IndexingException) e).isRetryable())
+                .hasMessageContaining("index-major-version");
+    }
+
+    @Test
+    void throwsNonRetryableIndexingException_whenMinorVersionHeaderMissing() {
+        server.expect(requestTo(BASE_URI + "/index-api/searchitems?index_type=PreziusRegistration&origin_id=reg-42"))
+                .andRespond(withSuccess("""
+                        {"origin":{"id":"reg-42","version":null,"bp_id":null,"created":null,"modified":null,"reference":null},"data":{}}
+                        """, MediaType.APPLICATION_JSON)
+                        .header("index-major-version", "2"));
+
+        OriginReference ref = new OriginReference(INDEX_TYPE, ORIGIN_ID, null);
+        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref))
+                .isInstanceOf(IndexingException.class)
+                .matches(e -> !((IndexingException) e).isRetryable())
+                .hasMessageContaining("index-minor-version");
+    }
+
+    @Test
     void throwsRetryableIndexingExceptionOnServerError() {
         server.expect(requestTo(BASE_URI + "/index-api/searchitems?index_type=PreziusRegistration&origin_id=reg-42"))
                 .andRespond(withServerError());

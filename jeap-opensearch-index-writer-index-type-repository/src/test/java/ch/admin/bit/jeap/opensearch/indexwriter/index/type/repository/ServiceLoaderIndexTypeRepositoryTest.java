@@ -1,6 +1,6 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.index.type.repository;
 
-import ch.admin.bit.jeap.opensearch.indextype.IndexTypeDescriptor;
+import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.ConfigurationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class ServiceLoaderIndexTypeRepositoryTest {
 
     @Test
     void getAllReturnsRegisteredIndexTypes() {
-        List<IndexTypeDescriptor> all = repository.getAll();
+        List<IndexType<?>> all = repository.getAll();
 
         assertThat(all).hasSize(1);
         assertThat(all.getFirst()).isInstanceOf(TestIndexType.class);
@@ -33,7 +33,7 @@ class ServiceLoaderIndexTypeRepositoryTest {
 
     @Test
     void findByOriginTypeAndMajorVersionReturnsMatchingType() {
-        Optional<IndexTypeDescriptor> result = repository.findByOriginTypeAndMajorVersion("TestDocument", 1);
+        Optional<IndexType<?>> result = repository.findByOriginTypeAndMajorVersion("TestDocument", 1);
 
         assertThat(result).isPresent();
         assertThat(result.get().system()).isEqualTo("TEST");
@@ -59,7 +59,7 @@ class ServiceLoaderIndexTypeRepositoryTest {
         field.setAccessible(true);
         field.set(repo, List.of(new TestIndexType(), new TestIndexTypeV1Minor1()));
 
-        Optional<IndexTypeDescriptor> result = repo.findByOriginTypeAndMajorVersion("TestDocument", 1);
+        Optional<IndexType<?>> result = repo.findByOriginTypeAndMajorVersion("TestDocument", 1);
 
         assertThat(result).isPresent();
         assertThat(result.get().minorVersion()).isEqualTo(1);

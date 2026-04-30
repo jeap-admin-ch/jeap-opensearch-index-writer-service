@@ -6,25 +6,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @Data
-@ConfigurationProperties(prefix = "jeap.opensearch.indexwriter.opensearch")
+@ConfigurationProperties(prefix = "jeap.opensearch.indexwriter.connection")
 @Slf4j
 public class AdapterOpenSearchProperties {
-    // others may come later
-    private ConnectionType connectionType = ConnectionType.AWS;
-    private Aws aws;
+
+    private String url;
+
+    /**
+     * AWS region for SigV4 request signing (e.g. {@code eu-central-2}).
+     * When set, requests to AWS OpenSearch Service are signed using the default AWS credential provider chain
+     * (ECS task role, EC2 instance profile, environment variables, etc.).
+     * Leave blank for non-AWS deployments.
+     */
+    private String signingRegion;
 
     @PostConstruct
     void log() {
-        log.info("Initialized AdapterOpenSearchProperties with connectionType: {} and aws: {}", connectionType, aws);
-    }
-
-    @Data
-    public static class Aws {
-        private String endpoint;
-        private String region;
-    }
-
-    public enum ConnectionType {
-        AWS
+        log.info("Initialized AdapterOpenSearchProperties with url: {}, signingRegion: {}", url, signingRegion);
     }
 }

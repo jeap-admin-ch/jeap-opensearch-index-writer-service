@@ -26,7 +26,6 @@ public class JavaBeanGenerator {
     /**
      * Generates the data record and IndexType singleton for one (indexType, majorVersion).
      *
-     * @param allMinorMappingsForMajor all mapping files for this major, sorted by minor version ascending
      * @return FQN of the generated IndexType class
      */
     public static String packageFor(String basePackage, String system, String indexTypeName) {
