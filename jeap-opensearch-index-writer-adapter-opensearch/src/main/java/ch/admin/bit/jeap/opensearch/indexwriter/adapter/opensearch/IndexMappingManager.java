@@ -12,8 +12,6 @@ import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.indices.GetAliasRequest;
 import org.opensearch.client.opensearch.indices.GetAliasResponse;
-import org.opensearch.client.opensearch.indices.GetIndicesSettingsRequest;
-import org.opensearch.client.opensearch.indices.GetIndicesSettingsResponse;
 import org.opensearch.client.opensearch.indices.GetMappingRequest;
 import org.opensearch.client.opensearch.indices.GetMappingResponse;
 import org.opensearch.client.opensearch.indices.IndexSettings;
@@ -28,16 +26,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Set;
-
 @Component
 @RequiredArgsConstructor
 @Slf4j
 class IndexMappingManager {
 
-    static final String ISM_ROLLOVER_ALIAS_SETTING = "plugins.index_state_management.rollover_alias";
     static final String SCHEMA_VERSION_META_KEY = "schema_version";
     private static final String MAPPINGS_JSON_KEY = "mappings";
     private static final String META_JSON_KEY = "_meta";
+    private static final String ISM_ROLLOVER_ALIAS_SETTING = "plugins.index_state_management.rollover_alias";
 
     private final OpenSearchClient openSearchClient;
     private final DataFieldValidator dataFieldValidator;
@@ -110,27 +107,14 @@ class IndexMappingManager {
         }
     }
 
-    private void ensureRolloverAlias(String physicalIndex, String indexWriteAlias) throws IOException {
-        GetIndicesSettingsRequest getSettingsRequest = new GetIndicesSettingsRequest.Builder()
-                .index(physicalIndex)
-                .build();
-        GetIndicesSettingsResponse settingsResponse = openSearchClient.indices().getSettings(getSettingsRequest);
-        org.opensearch.client.opensearch.indices.IndexState indexState = settingsResponse.result().get(physicalIndex);
-        if (indexState != null && indexState.settings() != null) {
-            JsonData existing = indexState.settings().customSettings().get(ISM_ROLLOVER_ALIAS_SETTING);
-            @SuppressWarnings("resource")
-            JsonpMapper mapper = openSearchClient._transport().jsonpMapper();
-            if (existing != null && indexWriteAlias.equals(existing.to(String.class, mapper))) {
-                log.debug("ISM rollover alias for index '{}' is already set to '{}'", physicalIndex, indexWriteAlias);
-                return;
-            }
-        }
-        log.info("Setting ISM rollover alias for index '{}' to '{}'", physicalIndex, indexWriteAlias);
-        openSearchClient.indices().putSettings(new PutIndicesSettingsRequest.Builder()
+    private void ensureRolloverAlias(String physicalIndex, String writeAlias) throws IOException {
+        PutIndicesSettingsRequest request = new PutIndicesSettingsRequest.Builder()
                 .index(physicalIndex)
                 .settings(IndexSettings.of(s -> s
-                        .customSettings(ISM_ROLLOVER_ALIAS_SETTING, JsonData.of(indexWriteAlias))))
-                .build());
+                        .customSettings(ISM_ROLLOVER_ALIAS_SETTING, JsonData.of(writeAlias))))
+                .build();
+        openSearchClient.indices().putSettings(request);
+        log.debug("Set ISM rollover alias '{}' on index '{}'", writeAlias, physicalIndex);
     }
 
     private boolean isMappingUpToDate(String indexName, int minorVersion) throws IOException {

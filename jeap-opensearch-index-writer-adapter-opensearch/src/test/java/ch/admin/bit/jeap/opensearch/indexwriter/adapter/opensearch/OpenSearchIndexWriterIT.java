@@ -34,19 +34,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
 class OpenSearchIndexWriterIT {
 
     private static final String INDEX_WRITE_ALIAS = "orders_v1_write";
     private static final String INDEX_READ_ALIAS = "orders_read";
-    private static final String PHYSICAL_INDEX = INDEX_WRITE_ALIAS + "_p000001";
+    private static final String PHYSICAL_INDEX = "orders_v1-000001";
     private static final String STRUCTURE_WRITE_ALIAS = "orders_v1_structure_write";
     private static final String STRUCTURE_READ_ALIAS = "orders_v1_structure_read";
-    private static final String STRUCTURE_INDEX = STRUCTURE_WRITE_ALIAS + "_p000001";
+    private static final String STRUCTURE_INDEX = "orders_v1_structure-000001";
     private static final int MINOR_VERSION = 3;
 
     private static final String MAPPING_JSON = """
@@ -148,7 +146,7 @@ class OpenSearchIndexWriterIT {
                   "index_templates" : [ {
                     "name" : "orders_v1_structure_write_template",
                     "index_template" : {
-                      "index_patterns" : [ "orders_v1_structure_p*" ],
+                      "index_patterns" : [ "orders_v1_structure-*" ],
                       "template" : {
                         "settings" : {
                           "index" : {
@@ -189,7 +187,7 @@ class OpenSearchIndexWriterIT {
 
         assertThat(actual).isEqualTo("""
                 {
-                  "orders_v1_structure_write_p000001" : {
+                  "orders_v1_structure-000001" : {
                     "mappings" : {
                       "dynamic" : "false",
                       "_meta" : {

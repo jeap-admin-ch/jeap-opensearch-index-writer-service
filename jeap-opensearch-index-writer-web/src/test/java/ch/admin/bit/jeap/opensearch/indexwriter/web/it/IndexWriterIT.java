@@ -117,7 +117,8 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
                 .build();
         plainOpenSearchClient = new OpenSearchClient(transport);
         for (String alias : ALL_WRITE_ALIASES) {
-            String physicalIndex = alias.toLowerCase() + "_p000001";
+            String base = alias.toLowerCase();
+            String physicalIndex = (base.endsWith("_write") ? base.substring(0, base.length() - "_write".length()) : base) + "-000001";
             plainOpenSearchClient.indices().create(new CreateIndexRequest.Builder().index(physicalIndex).build());
             plainOpenSearchClient.indices().putAlias(new PutAliasRequest.Builder()
                     .index(physicalIndex)

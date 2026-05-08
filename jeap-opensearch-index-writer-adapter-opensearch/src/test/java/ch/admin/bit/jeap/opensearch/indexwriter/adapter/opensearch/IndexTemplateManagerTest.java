@@ -52,13 +52,13 @@ class IndexTemplateManagerTest {
     }
 
     @Test
-    void indexPattern_stripsWriteSuffix_andAppendsPartitionWildcard() {
-        assertThat(IndexTemplateManager.indexPattern("orders_V1_write")).isEqualTo("orders_v1_p*");
+    void indexPattern_stripsWriteSuffix_andAppendsRolloverWildcard() {
+        assertThat(IndexTemplateManager.indexPattern("orders_V1_write")).isEqualTo("orders_v1-*");
     }
 
     @Test
-    void indexPattern_withoutWriteSuffix_appendsPartitionWildcard() {
-        assertThat(IndexTemplateManager.indexPattern("orders_V1")).isEqualTo("orders_v1_p*");
+    void indexPattern_withoutWriteSuffix_appendsRolloverWildcard() {
+        assertThat(IndexTemplateManager.indexPattern("orders_V1")).isEqualTo("orders_v1-*");
     }
 
     // --- ensureIndexTemplateUpToDate ---

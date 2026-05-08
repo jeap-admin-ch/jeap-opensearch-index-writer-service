@@ -19,6 +19,8 @@ import org.opensearch.client.opensearch.indices.GetAliasResponse;
 import org.opensearch.client.opensearch.indices.GetMappingRequest;
 import org.opensearch.client.opensearch.indices.GetMappingResponse;
 import org.opensearch.client.opensearch.indices.OpenSearchIndicesClient;
+import org.opensearch.client.opensearch.indices.PutIndicesSettingsRequest;
+import org.opensearch.client.opensearch.indices.PutIndicesSettingsResponse;
 import org.opensearch.client.opensearch.indices.PutMappingRequest;
 import org.opensearch.client.opensearch.indices.PutMappingResponse;
 import org.opensearch.client.opensearch.indices.get_mapping.IndexMappingRecord;
@@ -42,7 +44,7 @@ import static org.mockito.Mockito.when;
 class IndexMappingManagerTest {
 
     private static final String INDEX_WRITE_ALIAS = "orders_V1_write";
-    private static final String PHYSICAL_INDEX = "orders_v1_write_p000001";
+    private static final String PHYSICAL_INDEX = "orders_v1_write-000001";
     private static final int MINOR_VERSION = 3;
     private static final String MAPPING_JSON = """
             {
@@ -118,6 +120,8 @@ class IndexMappingManagerTest {
         setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
+        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
+                .thenReturn(mock(PutIndicesSettingsResponse.class));
 
         TypeMapping outdatedMapping = TypeMapping.of(t -> t
                 .dynamic(DynamicMapping.False)
@@ -137,6 +141,8 @@ class IndexMappingManagerTest {
         setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
+        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
+                .thenReturn(mock(PutIndicesSettingsResponse.class));
 
         TypeMapping currentMapping = TypeMapping.of(t -> t
                 .dynamic(DynamicMapping.False)
@@ -146,6 +152,24 @@ class IndexMappingManagerTest {
         indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, currentMapping);
 
         verify(indicesClient, never()).putMapping(any(PutMappingRequest.class));
+    }
+
+    @Test
+    void ensureMappingUpToDate_setsRolloverAlias_onPhysicalIndex() throws IOException {
+        setupTransportWithMapper();
+        when(openSearchClient.indices()).thenReturn(indicesClient);
+        setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
+
+        TypeMapping currentMapping = TypeMapping.of(t -> t
+                .dynamic(DynamicMapping.False)
+                .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of(String.valueOf(MINOR_VERSION))));
+        setupMappingForIndex(PHYSICAL_INDEX, currentMapping);
+        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
+                .thenReturn(mock(PutIndicesSettingsResponse.class));
+
+        indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, currentMapping);
+
+        verify(indicesClient).putSettings(any(PutIndicesSettingsRequest.class));
     }
 
     // --- helpers ---
@@ -161,23 +185,6 @@ class IndexMappingManagerTest {
         when(aliasResponse.result()).thenReturn(Map.of(physicalIndex, mock(
                 org.opensearch.client.opensearch.indices.get_alias.IndexAliases.class)));
         when(indicesClient.getAlias(any(GetAliasRequest.class))).thenReturn(aliasResponse);
-        setupRolloverAliasNotSet(physicalIndex);
-    }
-
-    private void setupRolloverAliasNotSet(String physicalIndex) throws IOException {
-        org.opensearch.client.opensearch.indices.IndexState indexState =
-                mock(org.opensearch.client.opensearch.indices.IndexState.class);
-        org.opensearch.client.opensearch.indices.IndexSettings settings =
-                mock(org.opensearch.client.opensearch.indices.IndexSettings.class);
-        when(indexState.settings()).thenReturn(settings);
-        when(settings.customSettings()).thenReturn(Map.of());
-        org.opensearch.client.opensearch.indices.GetIndicesSettingsResponse settingsResponse =
-                mock(org.opensearch.client.opensearch.indices.GetIndicesSettingsResponse.class);
-        when(settingsResponse.result()).thenReturn(Map.of(physicalIndex, indexState));
-        when(indicesClient.getSettings(any(org.opensearch.client.opensearch.indices.GetIndicesSettingsRequest.class)))
-                .thenReturn(settingsResponse);
-        when(indicesClient.putSettings(any(org.opensearch.client.opensearch.indices.PutIndicesSettingsRequest.class)))
-                .thenReturn(mock(org.opensearch.client.opensearch.indices.PutIndicesSettingsResponse.class));
     }
 
     private void setupMappingForIndex(String indexName, TypeMapping typeMapping) throws IOException {

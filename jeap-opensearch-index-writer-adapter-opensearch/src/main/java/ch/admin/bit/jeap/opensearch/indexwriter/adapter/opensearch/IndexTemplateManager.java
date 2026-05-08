@@ -24,7 +24,8 @@ class IndexTemplateManager {
 
     private static final String WRITE_ALIAS_SUFFIX = "_write";
     private static final String TEMPLATE_NAME_SUFFIX = "_template";
-    private static final String INDEX_PATTERN_SUFFIX = "_p*";
+    private static final String INDEX_PATTERN_SUFFIX = "-*";
+    private static final String ISM_ROLLOVER_ALIAS_SETTING = "plugins.index_state_management.rollover_alias";
 
     private final OpenSearchClient openSearchClient;
 
@@ -36,15 +37,14 @@ class IndexTemplateManager {
         }
         String indexPattern = indexPattern(indexWriteAlias);
         log.info("Creating/updating index template '{}' with pattern '{}' at version {}", templateName, indexPattern, minorVersion);
-        IndexSettings settings = IndexSettings.of(s -> s
-                .customSettings(IndexMappingManager.ISM_ROLLOVER_ALIAS_SETTING, JsonData.of(indexWriteAlias)));
         PutIndexTemplateRequest putRequest = new PutIndexTemplateRequest.Builder()
                 .name(templateName)
                 .indexPatterns(indexPattern)
                 .template(new IndexTemplateMapping.Builder()
                         .mappings(typeMapping)
                         .aliases(Map.of(indexReadAlias, new Alias.Builder().build()))
-                        .settings(settings)
+                        .settings(IndexSettings.of(s -> s
+                                .customSettings(ISM_ROLLOVER_ALIAS_SETTING, JsonData.of(indexWriteAlias))))
                         .build())
                 .version((long) minorVersion)
                 .build();

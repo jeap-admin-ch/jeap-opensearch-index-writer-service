@@ -34,14 +34,14 @@ Service template to provide event-driven indexing of search items into OpenSearc
 
 ### OpenSearch Index
 
-A physical OpenSearch index managed by ISM rollover. One index per `IndexTypeVersion`, partitioned by rollover sequence (Option 1: `_p000001`, `_p000002`, …). Rollover is triggered by age or size via an ISM policy; the write alias always points to the current write index.
+A physical OpenSearch index managed by rollover. One index per `IndexTypeVersion`, partitioned by rollover sequence (`-000001`, `-000002`, …). Rollover is handled server-side by the OpenSearch ISM (Index State Management) policy, which runs autonomously against the write alias. The write alias always points to the current write index.
 
-**Pattern:** `<System>_<BusinessObject>_V<MajorVersion>_P<Seq>` (snake_case)
+**Pattern:** `<System>_<BusinessObject>_v<MajorVersion>-<Seq>` (snake_case, 6-digit zero-padded sequence)
 
 **Examples:**
-- `prezius_registration_v1_p000001`
-- `wvs_declaration_v2_p000001`
-- `jme_decree_document_v1_p000002`
+- `prezius_registration_v1-000001`
+- `wvs_declaration_v2-000001`
+- `jme_decree_document_v1-000002`
 
 ### IndexWriteAlias
 
@@ -75,9 +75,9 @@ For each `IndexTypeDescriptor` the service creates or updates a composable index
 
 | Derived name                   | Pattern                                      |
 |--------------------------------|----------------------------------------------|
-| `{indexWriteAlias}_template`   | `{base}_p*` (e.g. `mydocument_v1_p*`)        |
+| `{indexWriteAlias}_template`   | `{base}-*` (e.g. `mydocument_v1-*`)          |
 
-The template embeds the full field mapping (including a `_meta.schema_version` equal to the IndexType's minor version) and the **`IndexReadAlias`** for the index type. New rollover indices that match the pattern will automatically inherit this mapping and be added to the read alias — no manual alias management is needed after a rollover.
+The template embeds the full field mapping (including a `_meta.schema_version` equal to the IndexType's minor version), the **`IndexReadAlias`** for the index type, and the **`plugins.index_state_management.rollover_alias`** setting pointing to the write alias. New rollover indices that match the pattern will automatically inherit this mapping, be added to the read alias, and have the correct ISM rollover alias — no manual alias management is needed after a rollover.
 
 The template is only written when it does not yet exist **or** when its stored version number no longer matches the current minor version.
 
@@ -126,6 +126,35 @@ jeap:
         url: https://my-opensearch-host:9200
 ```
 
+### Index Rollover
+
+Index rollover is managed server-side by an **OpenSearch ISM (Index State Management) policy** configured in IaC. The service itself does not trigger rollover.
+
+The index template created by the service on startup includes the `plugins.index_state_management.rollover_alias` setting pointing to the write alias. This ensures that every new partition created by ISM automatically inherits the correct rollover alias setting and can itself be rolled over.
+
+**IaC responsibility:** The initial physical index (e.g. `jme_decree_document_v1-000001`) must be created by IaC with:
+- The write alias pointing to it (`is_write_index: true`)
+- The `plugins.index_state_management.rollover_alias` setting pointing to the write alias
+- An ISM policy attached via `ism_template` matching the index pattern `jme_*-*`
+
+```json
+# IaC example (provider_indices.json)
+"jme_decree_document_v1-000001": {
+  "number_of_shards": 2,
+  "number_of_replicas": 1,
+  "refresh_interval": "5s",
+  "plugins": {
+    "index_state_management": {
+      "rollover_alias": "jme_decree_document_v1_write"
+    }
+  },
+  "aliases": {
+    "jme_decree_document_v1_write": { "is_write_index": true },
+    "jme_decree_document_read": {}
+  }
+}
+```
+
 ### OpenSearch Permissions
 
 The service principal (IAM role or OpenSearch internal user) requires the following permissions:
@@ -149,7 +178,7 @@ The service principal (IAM role or OpenSearch internal user) requires the follow
 | `indices:admin/aliases/get`    | Resolve which physical indices are behind a write alias            |
 | `indices:admin/mappings/get`   | Read the current mapping of a physical index                       |
 | `indices:admin/mapping/put`    | Update the mapping of a physical index on startup                  |
-| `indices:admin/settings/update`| Set the ISM rollover alias on existing physical indices on startup |
+| `indices:admin/settings/update`| Set `plugins.index_state_management.rollover_alias` on physical indices (handled by IaC) |
 | `indices:data/write/bulk*`     | Write documents via the bulk API (wildcard form)                   |
 | `indices:data/write/bulk`      | Write documents via the bulk API                                   |
 | `indices:data/write/index`     | Index (upsert) individual documents                                |
@@ -263,7 +292,7 @@ Each entry in the `messages` array maps a Kafka message type and topic to one or
 
 ## Write Target
 
-All document operations target the **`IndexWriteAlias`** of the configured `IndexTypeVersion` (e.g. `mydocument_v1_write`). Using an alias rather than a physical index name allows ISM rollover to rotate physical indices transparently — when a rollover fires, the write alias is atomically re-pointed to the new `_p<seq>` index.
+All document operations target the **`IndexWriteAlias`** of the configured `IndexTypeVersion` (e.g. `mydocument_v1_write`). Using an alias rather than a physical index name allows rollover to rotate physical indices transparently — when a rollover fires, the write alias is atomically re-pointed to the new `-<seq>` index.
 
 | Operation | OpenSearch call                                                                 |
 |-----------|---------------------------------------------------------------------------------|
