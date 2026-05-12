@@ -253,6 +253,7 @@ Apache License Version 2.0
  * kotlinx-serialization-core - [org.jetbrains.kotlinx:kotlinx-serialization-core-jvm](https://github.com/Kotlin/kotlinx.serialization)
  * JSpecify annotations - [org.jspecify:jspecify](http://jspecify.org/)
  * Objenesis - [org.objenesis:objenesis](http://objenesis.org/objenesis)
+ * OpenSearch Testcontainers integration - [org.opensearch:opensearch-testcontainers](https://github.com/opensearch-project/opensearch-testcontainers/)
  * OpenSearch Java Client - [org.opensearch.client:opensearch-java](https://github.com/opensearch-project/opensearch-java/)
  * org.opentest4j:opentest4j - [org.opentest4j:opentest4j](https://github.com/ota4j-team/opentest4j)
  * Reflections - [org.reflections:reflections](http://github.com/ronmamo/reflections)

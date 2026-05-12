@@ -1,0 +1,5 @@
+ch.admin.bit.jeap.opensearch.client.config.OpenSearchClientConfiguration
+ch.admin.bit.jeap.opensearch.client.config.OpenSearchClientAwsConfiguration
+ch.admin.bit.jeap.opensearch.client.auth.AuthorizationAutoConfiguration
+ch.admin.bit.jeap.opensearch.client.authprovider.JeapSecurityAuthorizationAutoConfiguration
+ch.admin.bit.jeap.opensearch.client.search.SearchAutoConfiguration
