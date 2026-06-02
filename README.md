@@ -95,11 +95,11 @@ Normally you will not use this project directly, but instead set up your own ind
 
 ## Properties
 
-| Property                                                         | Default                               | Description                                                                                                                   |
-|------------------------------------------------------------------|---------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| `jeap.opensearch.indexwriter.connection.url`                     | —                                     | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com`).                                      |
-| `jeap.opensearch.indexwriter.connection.signing-region`          | —                                     | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.). Leave blank for non-AWS deployments. |
-| `jeap.opensearch.indexwriter.search-item-provider.oauth-client`  | `search-item-provider`                | OAuth2 client registration name (from `spring.security.oauth2.client`) used to authenticate calls to the SearchItem provider. |
+| Property                                                      | Default | Description                                                                                                                                                                                               |
+|---------------------------------------------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jeap.opensearch.indexwriter.connection.url`                  | —       | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com`).                                                                                                                   |
+| `jeap.opensearch.indexwriter.connection.signing-region`       | —       | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.). Leave blank for non-AWS deployments. |
+| `jeap.opensearch.indexwriter.search-item-provider.timeout`    | 30s     | Connect timeout for the rest client accessing the provider apis.                                                                                                                                       |
 
 ### OpenSearch Connection
 
@@ -218,20 +218,6 @@ As a JSON snippet for an OpenSearch security role:
 }
 ```
 
-### Remote Data (SearchItem Provider)
-
-The service fetches SearchItems from a remote HTTP API. Configure the OAuth2 client registration used for those calls.
-
-Example:
-
-```yaml
-jeap:
-  opensearch:
-    indexwriter:
-      search-item-provider:
-        oauth-client: my-search-item-provider-client
-```
-
 ### Message Configuration
 
 Message-to-operation mappings are loaded at startup from the location `/opensearch/messages.json`.
@@ -249,6 +235,7 @@ Each entry in the `messages` array maps a Kafka message type and topic to one or
           "indexType": "MyDocument",
           "indexOperation": "UPSERT",
           "uri": "${my.service.resource.base-uri}",
+          "oauthClientId": "my-service-client-id",
           "referenceProvider": "com.example.indexwriter.MyDocumentReferenceProvider",
           "condition": "com.example.indexwriter.MyDocumentActiveCondition",
           "featureFlag": "MY_DOCUMENT_INDEXING"
@@ -281,14 +268,15 @@ Each entry in the `messages` array maps a Kafka message type and topic to one or
 
 **Operation fields:**
 
-| Field               | Required | Description                                                                                                                                           |
-|---------------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `indexType`         | ✅        | Name of the target IndexType (must match a registered `IndexTypeDescriptor`).                                                                         |
-| `indexOperation`    | ✅        | `UPSERT` or `DELETE` (case-insensitive).                                                                                                              |
-| `uri`               | ✅        | URI of the SearchItem Provider endpoint. Spring property placeholders (`${...}`) are resolved at startup.                                             |
-| `referenceProvider` | ✅        | Fully qualified class name of the Spring bean implementing `ReferenceProvider`, e.g. `com.example.indexwriter.MyDocumentReferenceProvider`.           |
-| `condition`         | ❌        | Fully qualified class name of the Spring bean implementing `IndexingCondition`. The operation is skipped when the condition evaluates to `false`.     |
-| `featureFlag`       | ❌        | Name of a jEAP feature flag. The operation is skipped when the flag is inactive.                                                                      |
+| Field               | Required | Description                                                                                                                                                                      |
+|---------------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `indexType`         | ✅        | Name of the target IndexType (must match a registered `IndexTypeDescriptor`).                                                                                                    |
+| `indexOperation`    | ✅        | `UPSERT` or `DELETE` (case-insensitive).                                                                                                                                         |
+| `uri`               | ✅        | URI of the SearchItem Provider endpoint. Spring property placeholders (`${...}`) are resolved at startup.                                                                        |
+| `oauthClientId`     | ❌        | The OAuth Client ID used to call the SearchItem Provider. Register this OAuth2 client in spring.security.oauth2.client.registration. If not configured, no OAuth Client is used. |
+| `referenceProvider` | ✅        | Fully qualified class name of the Spring bean implementing `ReferenceProvider`, e.g. `com.example.indexwriter.MyDocumentReferenceProvider`.                                      |
+| `condition`         | ❌        | Fully qualified class name of the Spring bean implementing `IndexingCondition`. The operation is skipped when the condition evaluates to `false`.                                |
+| `featureFlag`       | ❌        | Name of a jEAP feature flag. The operation is skipped when the flag is inactive.                                                                                                 |
 
 ## Write Target
 

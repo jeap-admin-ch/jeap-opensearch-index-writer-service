@@ -76,6 +76,6 @@ class MessageIndexingReceiverTest {
     }
 
     private MessageOperationConfig operation(IndexOperation op, String indexType) {
-        return new MessageOperationConfig(indexType, op, null, null, null, null);
+        return new MessageOperationConfig(indexType, op, null, null, null, null, null);
     }
 }

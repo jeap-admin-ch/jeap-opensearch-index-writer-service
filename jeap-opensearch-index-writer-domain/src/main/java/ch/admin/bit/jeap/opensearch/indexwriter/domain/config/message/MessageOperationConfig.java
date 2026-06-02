@@ -8,6 +8,7 @@ public record MessageOperationConfig(
         String indexType,
         IndexOperation indexOperation,
         String uri,
+        String oauthClientId,
         ReferenceProvider<Message> referenceProvider,
         IndexingCondition<Message> condition,
         String featureFlag

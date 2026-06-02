@@ -59,7 +59,7 @@ public class MessageIndexingService {
         ReferenceProvider<Message> referenceProvider = operation.referenceProvider();
         OriginReference originReference = referenceProvider.extractReference(message);
 
-        SearchItemResult searchItemResult = searchItemProvider.findSearchItem(operation.uri(), operation.indexType(), originReference).orElseThrow(
+        SearchItemResult searchItemResult = searchItemProvider.findSearchItem(operation.uri(), operation.indexType(), originReference, operation.oauthClientId()).orElseThrow(
                 () -> IndexingException.searchItemNotFound(operation, originReference)
         );
 

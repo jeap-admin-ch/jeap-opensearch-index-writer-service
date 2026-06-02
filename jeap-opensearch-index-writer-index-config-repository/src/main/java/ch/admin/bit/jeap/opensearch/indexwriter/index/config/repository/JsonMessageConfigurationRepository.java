@@ -105,6 +105,7 @@ public class JsonMessageConfigurationRepository implements MessageConfigurationR
                         operationConfigRaw.indexType(),
                         operationConfigRaw.indexOperation(),
                         environment.resolvePlaceholders(operationConfigRaw.uri()),
+                        operationConfigRaw.oauthClientId(),
                         referenceProvider,
                         condition,
                         operationConfigRaw.featureFlag());

@@ -6,6 +6,7 @@ record MessageOperationConfigRaw(
         String indexType,
         IndexOperation indexOperation,
         String uri,
+        String oauthClientId,
         String referenceProvider,
         String condition,
         String featureFlag

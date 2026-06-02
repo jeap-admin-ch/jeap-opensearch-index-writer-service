@@ -107,7 +107,7 @@ class MessageIndexingServiceTest {
 
         assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.DELETE, null)));
 
-        verify(searchItemProvider).findSearchItem(BASE_URI, INDEX_TYPE, ORIGIN_REF);
+        verify(searchItemProvider).findSearchItem(BASE_URI, INDEX_TYPE, ORIGIN_REF, null);
         verify(indexWriter).deleteSearchItem(INDEX_WRITE_ALIAS, "id-1");
     }
 
@@ -116,7 +116,7 @@ class MessageIndexingServiceTest {
     void deleteThrowsWhenSearchItemNotFound() {
         stubMessageType("PreziusRegistrationDeleted");
         stubReferenceProvider();
-        when(searchItemProvider.findSearchItem(any(), any(), any())).thenReturn(Optional.empty());
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.empty());
         var op = operation(IndexOperation.DELETE, null);
 
         assertThatThrownBy(() -> service.index(message, op))
@@ -156,7 +156,7 @@ class MessageIndexingServiceTest {
     void upsertThrowsWhenSearchItemNotFound() {
         stubMessageType("PreziusRegistrationCreated");
         stubReferenceProvider();
-        when(searchItemProvider.findSearchItem(any(), any(), any())).thenReturn(Optional.empty());
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.empty());
         var op = operation(IndexOperation.UPSERT, null);
 
         assertThatThrownBy(() -> service.index(message, op))
@@ -188,7 +188,7 @@ class MessageIndexingServiceTest {
         when(condition.evaluate(message)).thenReturn(true);
 
         assertThatNoException().isThrownBy(() -> service.index(message,
-                new MessageOperationConfig(INDEX_TYPE, IndexOperation.UPSERT, BASE_URI, referenceProvider, condition, null)));
+                new MessageOperationConfig(INDEX_TYPE, IndexOperation.UPSERT, BASE_URI, null, referenceProvider, condition, null)));
 
         verify(indexWriter).upsertSearchItem(any(), any(), any());
     }
@@ -200,7 +200,7 @@ class MessageIndexingServiceTest {
         when(condition.evaluate(message)).thenReturn(false);
 
         assertThatNoException().isThrownBy(() -> service.index(message,
-                new MessageOperationConfig(INDEX_TYPE, IndexOperation.UPSERT, BASE_URI, referenceProvider, condition, null)));
+                new MessageOperationConfig(INDEX_TYPE, IndexOperation.UPSERT, BASE_URI, null, referenceProvider, condition, null)));
 
         verifyNoInteractions(searchItemProvider, indexWriter);
     }
@@ -250,7 +250,7 @@ class MessageIndexingServiceTest {
         dataNode.put("my_field", "hello");
         SearchItemResult result = new SearchItemResult(1, 0,
                 new SearchItem<>(validOrigin(), dataNode));
-        when(searchItemProvider.findSearchItem(any(), any(), any())).thenReturn(Optional.of(result));
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.of(result));
         when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 1)).thenReturn(Optional.of(indexType));
         when(indexType.indexWriteAlias()).thenReturn(INDEX_WRITE_ALIAS);
         when(indexType.dataClass()).thenReturn((Class) TypedData.class);
@@ -270,7 +270,7 @@ class MessageIndexingServiceTest {
         stubReferenceProvider();
         SearchItemResult result = new SearchItemResult(1, 0,
                 new SearchItem<>(validOrigin(), JsonNodeFactory.instance.objectNode()));
-        when(searchItemProvider.findSearchItem(any(), any(), any())).thenReturn(Optional.of(result));
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.of(result));
         when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 1)).thenReturn(Optional.of(indexType));
         when(indexType.dataClass()).thenReturn((Class) TypedData.class);
         when(indexType.originType()).thenReturn(INDEX_TYPE);
@@ -296,7 +296,7 @@ class MessageIndexingServiceTest {
     private void stubSearchItemFoundWith(Origin origin) {
         SearchItemResult result = new SearchItemResult(1, 0,
                 new SearchItem<>(origin, JsonNodeFactory.instance.objectNode()));
-        when(searchItemProvider.findSearchItem(any(), any(), any())).thenReturn(Optional.of(result));
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.of(result));
     }
 
     private static Origin validOrigin() {
@@ -318,6 +318,6 @@ class MessageIndexingServiceTest {
 
     @SuppressWarnings("unchecked")
     private MessageOperationConfig operation(IndexOperation op, String featureFlag) {
-        return new MessageOperationConfig(INDEX_TYPE, op, BASE_URI, referenceProvider, null, featureFlag);
+        return new MessageOperationConfig(INDEX_TYPE, op, BASE_URI, null, referenceProvider, null, featureFlag);
     }
 }

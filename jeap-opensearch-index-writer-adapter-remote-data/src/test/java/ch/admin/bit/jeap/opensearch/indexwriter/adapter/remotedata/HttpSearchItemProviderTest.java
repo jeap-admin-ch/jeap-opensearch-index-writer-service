@@ -3,6 +3,7 @@ package ch.admin.bit.jeap.opensearch.indexwriter.adapter.remotedata;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.IndexingException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.SearchItemResult;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.OriginReference;
+import ch.admin.bit.jeap.security.restclient.JeapOAuth2RestClientBuilderFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -17,6 +18,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
@@ -32,9 +34,11 @@ class HttpSearchItemProviderTest {
 
     @BeforeEach
     void setUp() {
-        RestClient.Builder builder = RestClient.builder();
-        server = MockRestServiceServer.bindTo(builder).build();
-        provider = new HttpSearchItemProvider(builder.build());
+        RemoteDataProperties remoteDataProperties = new RemoteDataProperties();
+        RestClient.Builder noAuthRestClientBuilder = RestClient.builder();
+        server = MockRestServiceServer.bindTo(noAuthRestClientBuilder).build();
+        JeapOAuth2RestClientBuilderFactory connectionFactory = mock(JeapOAuth2RestClientBuilderFactory.class);
+        provider = new HttpSearchItemProvider(remoteDataProperties, connectionFactory, noAuthRestClientBuilder);
     }
 
     @Test
@@ -46,7 +50,7 @@ class HttpSearchItemProviderTest {
                         """, MediaType.APPLICATION_JSON), 2, 3));
 
         Optional<SearchItemResult> result = provider.findSearchItem(BASE_URI, INDEX_TYPE,
-                new OriginReference(INDEX_TYPE, ORIGIN_ID, null));
+                new OriginReference(INDEX_TYPE, ORIGIN_ID, null), null);
 
         assertThat(result).isPresent();
         assertThat(result.get().indexMajorVersion()).isEqualTo(2);
@@ -63,7 +67,7 @@ class HttpSearchItemProviderTest {
                         """, MediaType.APPLICATION_JSON), 1, 0));
 
         Optional<SearchItemResult> result = provider.findSearchItem(BASE_URI, INDEX_TYPE,
-                new OriginReference(INDEX_TYPE, ORIGIN_ID, "v1"));
+                new OriginReference(INDEX_TYPE, ORIGIN_ID, "v1"), null);
 
         assertThat(result).isPresent();
     }
@@ -74,7 +78,7 @@ class HttpSearchItemProviderTest {
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
         Optional<SearchItemResult> result = provider.findSearchItem(BASE_URI, INDEX_TYPE,
-                new OriginReference(INDEX_TYPE, ORIGIN_ID, null));
+                new OriginReference(INDEX_TYPE, ORIGIN_ID, null), null);
 
         assertThat(result).isEmpty();
     }
@@ -93,7 +97,7 @@ class HttpSearchItemProviderTest {
                         .header("index-minor-version", "3"));
 
         OriginReference ref = new OriginReference(INDEX_TYPE, ORIGIN_ID, null);
-        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref))
+        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref, null))
                 .isInstanceOf(IndexingException.class)
                 .matches(e -> !((IndexingException) e).isRetryable())
                 .hasMessageContaining("index-major-version");
@@ -108,7 +112,7 @@ class HttpSearchItemProviderTest {
                         .header("index-major-version", "2"));
 
         OriginReference ref = new OriginReference(INDEX_TYPE, ORIGIN_ID, null);
-        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref))
+        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref, null))
                 .isInstanceOf(IndexingException.class)
                 .matches(e -> !((IndexingException) e).isRetryable())
                 .hasMessageContaining("index-minor-version");
@@ -120,7 +124,7 @@ class HttpSearchItemProviderTest {
                 .andRespond(withServerError());
 
         OriginReference ref = new OriginReference(INDEX_TYPE, ORIGIN_ID, null);
-        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref))
+        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref, null))
                 .isInstanceOf(IndexingException.class)
                 .matches(e -> ((IndexingException) e).isRetryable());
     }
@@ -131,7 +135,7 @@ class HttpSearchItemProviderTest {
                 .andRespond(withException(new IOException("Connection refused")));
 
         OriginReference ref = new OriginReference(INDEX_TYPE, ORIGIN_ID, null);
-        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref))
+        assertThatThrownBy(() -> provider.findSearchItem(BASE_URI, INDEX_TYPE, ref, null))
                 .isInstanceOf(IndexingException.class)
                 .matches(e -> ((IndexingException) e).isRetryable());
     }

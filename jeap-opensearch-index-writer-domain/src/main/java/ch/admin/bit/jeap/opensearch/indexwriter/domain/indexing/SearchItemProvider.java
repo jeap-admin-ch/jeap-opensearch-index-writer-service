@@ -6,5 +6,5 @@ import java.util.Optional;
 
 public interface SearchItemProvider {
 
-    Optional<SearchItemResult> findSearchItem(String baseUri, String indexType, OriginReference originReference);
+    Optional<SearchItemResult> findSearchItem(String baseUri, String indexType, OriginReference originReference, String oauthClientId);
 }
