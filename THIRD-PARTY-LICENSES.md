@@ -30,6 +30,7 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-index-config-repository - [ch.admin.bit.jeap:jeap-opensearch-index-writer-index-config-repository](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-index-config-repository)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-index-type-repository - [ch.admin.bit.jeap:jeap-opensearch-index-writer-index-type-repository](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-index-type-repository)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-web - [ch.admin.bit.jeap:jeap-opensearch-index-writer-web](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-web)
+ * ch.admin.bit.jeap:jeap-opensearch-searchitem-model - [ch.admin.bit.jeap:jeap-opensearch-searchitem-model](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-searchitem-model)
  * ch.admin.bit.jeap:jeap-spring-boot-application-starter - [ch.admin.bit.jeap:jeap-spring-boot-application-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-application-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-config-aws-starter - [ch.admin.bit.jeap:jeap-spring-boot-config-aws-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-config-aws-starter/tree/main/jeap-spring-boot-config-aws-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-featureflag-starter - [ch.admin.bit.jeap:jeap-spring-boot-featureflag-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-featureflag-starter)
@@ -39,6 +40,7 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-spring-boot-roles-anywhere-starter - [ch.admin.bit.jeap:jeap-spring-boot-roles-anywhere-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-roles-anywhere-starter/tree/main/jeap-spring-boot-roles-anywhere-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-security-client-starter - [ch.admin.bit.jeap:jeap-spring-boot-security-client-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-client-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-security-starter - [ch.admin.bit.jeap:jeap-spring-boot-security-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter)
+ * ch.admin.bit.jeap:jeap-spring-boot-security-starter-test - [ch.admin.bit.jeap:jeap-spring-boot-security-starter-test](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter-test)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger - [ch.admin.bit.jeap:jeap-spring-boot-swagger](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger-starter - [ch.admin.bit.jeap:jeap-spring-boot-swagger-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger-starter)
  * ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event - [ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event](https://github.com/jeap-admin-ch/jeap-test-message-type-registry/tree/main)
@@ -308,6 +310,7 @@ Apache License Version 2.0
  * spring-security-oauth2-core - [org.springframework.security:spring-security-oauth2-core](https://spring.io/projects/spring-security)
  * spring-security-oauth2-jose - [org.springframework.security:spring-security-oauth2-jose](https://spring.io/projects/spring-security)
  * spring-security-oauth2-resource-server - [org.springframework.security:spring-security-oauth2-resource-server](https://spring.io/projects/spring-security)
+ * spring-security-test - [org.springframework.security:spring-security-test](https://spring.io/projects/spring-security)
  * spring-security-web - [org.springframework.security:spring-security-web](https://spring.io/projects/spring-security)
  * thymeleaf-spring6 - [org.thymeleaf:thymeleaf-spring6](http://www.thymeleaf.org/thymeleaf-lib/thymeleaf-spring6)
  * Togglz - Core Framework - [org.togglz:togglz-core](https://www.togglz.org/togglz-core/)
@@ -408,6 +411,7 @@ Eclipse Public License v2.0
  * Logback Classic Module - [ch.qos.logback:logback-classic](http://logback.qos.ch/logback-classic)
  * Logback Core Module - [ch.qos.logback:logback-core](http://logback.qos.ch/logback-core)
  * Jakarta Annotations API - [jakarta.annotation:jakarta.annotation-api](https://projects.eclipse.org/projects/ee4j.ca)
+ * Jakarta Servlet - [jakarta.servlet:jakarta.servlet-api](https://projects.eclipse.org/projects/ee4j.servlet)
  * AspectJ Weaver - [org.aspectj:aspectjweaver](https://www.eclipse.org/aspectj/)
  * Yasson - [org.eclipse:yasson](https://projects.eclipse.org/projects/ee4j.yasson)
  * JUnit Jupiter (Aggregator) - [org.junit.jupiter:junit-jupiter](https://junit.org/junit5/)
@@ -434,6 +438,7 @@ GNU General Public License, version 2 (GPL2), with the classpath exception
 -------------------------------
 
  * Jakarta Annotations API - [jakarta.annotation:jakarta.annotation-api](https://projects.eclipse.org/projects/ee4j.ca)
+ * Jakarta Servlet - [jakarta.servlet:jakarta.servlet-api](https://projects.eclipse.org/projects/ee4j.servlet)
 
 GNU General Public License, version 2 with the GNU Classpath Exception
 -------------------------------
