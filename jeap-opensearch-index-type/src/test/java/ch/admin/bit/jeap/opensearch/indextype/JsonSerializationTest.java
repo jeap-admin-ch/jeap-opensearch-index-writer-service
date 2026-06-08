@@ -29,13 +29,16 @@ class JsonSerializationTest {
 
     @Test
     void searchItemMetadataUsesSnakeCaseFieldNames() {
-        SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 2);
+        SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1, 2);
         JsonNode json = mapper.valueToTree(meta);
 
         assertThat(json.has("upserted_at")).isTrue();
+        assertThat(json.has("major_version")).isTrue();
+        assertThat(json.path("major_version").asInt()).isEqualTo(1);
         assertThat(json.has("minor_version")).isTrue();
         assertThat(json.path("minor_version").asInt()).isEqualTo(2);
         assertThat(json.has("upsertedAt")).isFalse();
+        assertThat(json.has("majorVersion")).isFalse();
         assertThat(json.has("minorVersion")).isFalse();
     }
 
@@ -50,20 +53,21 @@ class JsonSerializationTest {
 
     @Test
     void enrichedSearchItemUsesSearchItemKey() {
-        SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1);
+        SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1, 2);
         Origin origin = new Origin("id-1", "v1", "bp-1", null, Instant.EPOCH, Instant.EPOCH, null);
         SearchItemIndexed<String> enriched = new SearchItemIndexed<>(meta, origin, "payload");
 
         JsonNode json = mapper.valueToTree(enriched);
 
         assertThat(json.has("search_item")).isTrue();
-        assertThat(json.path("search_item").path("minor_version").asInt()).isEqualTo(1);
+        assertThat(json.path("search_item").path("major_version").asInt()).isEqualTo(1);
+        assertThat(json.path("search_item").path("minor_version").asInt()).isEqualTo(2);
         assertThat(json.has("searchItem")).isFalse();
     }
 
     @Test
     void enrichedSearchItemRoundTrips() throws Exception {
-        SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1);
+        SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1, 0);
         Origin origin = new Origin("id-rt", "v2", "bp-rt", null, Instant.EPOCH, Instant.EPOCH, null);
         SearchItemIndexed<String> original = new SearchItemIndexed<>(meta, origin, "data");
 
@@ -75,7 +79,8 @@ class JsonSerializationTest {
         assertThat(deserialized.data()).isEqualTo("data");
         assertThat(deserialized.origin().id()).isEqualTo("id-rt");
         assertThat(deserialized.origin().bpId()).isEqualTo("bp-rt");
-        assertThat(deserialized.searchItem().minorVersion()).isEqualTo(1);
+        assertThat(deserialized.searchItem().majorVersion()).isEqualTo(1);
+        assertThat(deserialized.searchItem().minorVersion()).isEqualTo(0);
     }
 
     @Test

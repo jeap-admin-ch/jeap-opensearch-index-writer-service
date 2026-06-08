@@ -45,6 +45,7 @@ class OpenSearchIndexWriterIT {
     private static final String STRUCTURE_WRITE_ALIAS = "orders_v1_structure_write";
     private static final String STRUCTURE_READ_ALIAS = "orders_v1_structure_read";
     private static final String STRUCTURE_INDEX = "orders_v1_structure-000001";
+    private static final int MAJOR_VERSION = 1;
     private static final int MINOR_VERSION = 3;
 
     private static final String MAPPING_JSON = """
@@ -283,14 +284,14 @@ class OpenSearchIndexWriterIT {
     private static SearchItemIndexed<String> buildSearchItem() {
         Origin origin = new Origin("id-1", "1", null, null, Instant.now(), Instant.now(), null);
         SearchItem<String> base = new SearchItem<>(origin, "data");
-        SearchItemMetadata meta = SearchItemMetadata.initial(MINOR_VERSION);
+        SearchItemMetadata meta = SearchItemMetadata.initial(MAJOR_VERSION, MINOR_VERSION);
         return SearchItemIndexed.of(base, meta);
     }
 
     private static <T> SearchItemIndexed<T> buildSearchItemWithData(T data) {
         Origin origin = new Origin("id-1", "1", null, null, Instant.now(), Instant.now(), null);
         SearchItem<T> base = new SearchItem<>(origin, data);
-        SearchItemMetadata meta = SearchItemMetadata.initial(MINOR_VERSION);
+        SearchItemMetadata meta = SearchItemMetadata.initial(MAJOR_VERSION, MINOR_VERSION);
         return SearchItemIndexed.of(base, meta);
     }
 }

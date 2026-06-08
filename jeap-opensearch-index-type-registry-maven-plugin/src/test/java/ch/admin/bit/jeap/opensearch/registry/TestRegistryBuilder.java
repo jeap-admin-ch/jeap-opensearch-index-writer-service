@@ -34,6 +34,7 @@ public class TestRegistryBuilder {
                     "type": "object",
                     "properties": {
                       "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                      "major_version": { "type": "integer" },
                       "minor_version": { "type": "integer" }
                     }
                   },
@@ -76,6 +77,7 @@ public class TestRegistryBuilder {
                     "type": "object",
                     "properties": {
                       "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                      "major_version": { "type": "integer" },
                       "minor_version": { "type": "integer" }
                     }
                   },
@@ -119,6 +121,7 @@ public class TestRegistryBuilder {
                     "type": "object",
                     "properties": {
                       "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                      "major_version": { "type": "integer" },
                       "minor_version": { "type": "integer" }
                     }
                   },

@@ -11,7 +11,7 @@ Service template to provide event-driven indexing of search items into OpenSearc
 - **Conditional Execution:** operations can reference a condition; the operation is only executed if the event satisfies it
 - **Feature Flags:** operations can be guarded by a feature flag; the operation is skipped when the flag is inactive
 - **Schema Validation:** Before writing, the service verifies that the SearchItem returned by the provider is compatible with the target IndexType definition
-- **Managed Metadata:** Before writing, the service enriches each `SearchItem` with `search_item.upserted_at` (timestamp of the index write) and `search_item.minor_version` (minor version of the `IndexType` mapping used at write time)
+- **Managed Metadata:** Before writing, the service enriches each `SearchItem` with `search_item.upserted_at` (timestamp of the index write), `search_item.major_version` and `search_item.minor_version` (version of the `IndexType` mapping used at write time)
 - **Index Alias Writes:** All writes use the `IndexWriteAlias` of the IndexTypeVersion, supporting platform-managed index rotation
 - **Error Handling:** If an index operation fails, the triggering event is forwarded to the jEAP error handling service
 - **Startup Mapping Validation:** On startup, the service compares the index mappings against the IndexType definitions — compatible deviations are updated automatically, incompatible deviations prevent startup
@@ -297,6 +297,7 @@ Every document written to OpenSearch has the following top-level structure:
 {
   "search_item": {
     "upserted_at":   "<ISO-8601 timestamp of the index write>",
+    "major_version": 1,
     "minor_version": 1
   },
   "origin": {
@@ -315,20 +316,21 @@ Every document written to OpenSearch has the following top-level structure:
 }
 ```
 
-| Field             | Type      | Description                                                                      |
-|-------------------|-----------|----------------------------------------------------------------------------------|
-| `search_item`     | object    | Metadata added by the index writer service on every write                        |
-| `upserted_at`     | date      | Timestamp of the index write operation                                           |
-| `minor_version`   | integer   | Minor version of the `IndexType` mapping used at write time                      |
-| `origin`          | object    | Reference back to the origin business object — populated by the resource service |
-| `origin.id`       | keyword   | Unique ID of the business object                                                 |
-| `origin.version`  | keyword   | Version string of the business object                                            |
-| `origin.bp_id`    | keyword   | Business partner ID                                                              |
-| `origin.tenant`   | keyword   | Tenant identifier (optional, may be `null`)                                      |
-| `origin.created`  | date      | Creation timestamp of the business object                                        |
-| `origin.modified` | date      | Last-modified timestamp of the business object                                   |
-| `origin.reference`| object    | Provider-specific reference data (not indexed, `enabled: false`)                 |
-| `data`            | object    | Business data — defined by the `IndexType` mapping, always snake_case            |
+| Field              | Type      | Description                                                                      |
+|--------------------|-----------|----------------------------------------------------------------------------------|
+| `search_item`      | object    | Metadata added by the index writer service on every write                        |
+| `upserted_at`      | date      | Timestamp of the index write operation                                           |
+| `major_version`    | integer   | Major version of the `IndexType` mapping used at write time                      |
+| `minor_version`    | integer   | Minor version of the `IndexType` mapping used at write time                      |
+| `origin`           | object    | Reference back to the origin business object — populated by the resource service |
+| `origin.id`        | keyword   | Unique ID of the business object                                                 |
+| `origin.version`   | keyword   | Version string of the business object                                            |
+| `origin.bp_id`     | keyword   | Business partner ID                                                              |
+| `origin.tenant`    | keyword   | Tenant identifier (optional, may be `null`)                                      |
+| `origin.created`   | date      | Creation timestamp of the business object                                        |
+| `origin.modified`  | date      | Last-modified timestamp of the business object                                   |
+| `origin.reference` | object    | Provider-specific reference data (not indexed, `enabled: false`)                 |
+| `data`             | object    | Business data — defined by the `IndexType` mapping, always snake_case            |
 
 ### Snake_case serialisation
 

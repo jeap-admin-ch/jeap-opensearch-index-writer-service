@@ -15,7 +15,7 @@ class SearchItemTest {
         Origin origin = origin("id-1");
         Data data = new Data("hello");
         SearchItem<Data> item = new SearchItem<>(origin, data);
-        SearchItemMetadata meta = SearchItemMetadata.initial(1);
+        SearchItemMetadata meta = SearchItemMetadata.initial(1, 1);
 
         SearchItemIndexed<Data> enriched = item.withMetadata(meta);
 
@@ -29,7 +29,7 @@ class SearchItemTest {
         Origin origin = origin("id-2");
         Data data = new Data("world");
         SearchItem<Data> item = new SearchItem<>(origin, data);
-        SearchItemMetadata meta = SearchItemMetadata.initial(1);
+        SearchItemMetadata meta = SearchItemMetadata.initial(1, 1);
 
         SearchItemIndexed<Data> viaWith = item.withMetadata(meta);
         SearchItemIndexed<Data> viaOf = SearchItemIndexed.of(item, meta);
@@ -43,7 +43,7 @@ class SearchItemTest {
         Data data = new Data("round-trip");
         SearchItem<Data> original = new SearchItem<>(origin, data);
 
-        SearchItem<Data> roundTripped = original.withMetadata(SearchItemMetadata.initial(0)).toBase();
+        SearchItem<Data> roundTripped = original.withMetadata(SearchItemMetadata.initial(1, 0)).toBase();
 
         assertThat(roundTripped).isEqualTo(original);
     }

@@ -29,6 +29,7 @@ class IndexTypeMappingSchemaValidatorTest {
                     "properties": {
                       "search_item": { "properties": {
                         "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "major_version": { "type": "integer" },
                         "minor_version": { "type": "integer" }
                       }},
                       "origin": { "properties": {
@@ -81,6 +82,7 @@ class IndexTypeMappingSchemaValidatorTest {
                     "properties": {
                       "search_item": { "properties": {
                         "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "major_version": { "type": "integer" },
                         "minor_version": { "type": "integer" }
                       }},
                       "data": {}
@@ -102,6 +104,7 @@ class IndexTypeMappingSchemaValidatorTest {
                     "properties": {
                       "search_item": { "properties": {
                         "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "major_version": { "type": "integer" },
                         "minor_version": { "type": "integer" }
                       }},
                       "origin": { "properties": {
@@ -131,6 +134,34 @@ class IndexTypeMappingSchemaValidatorTest {
     }
 
     @Test
+    void searchItemMissingMajorVersionFails(@TempDir File dir) throws IOException {
+        File mapping = write(dir, "mapping.json", """
+                {
+                  "mappings": {
+                    "dynamic": false,
+                    "properties": {
+                      "search_item": { "properties": {
+                        "upserted_at": { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "minor_version": { "type": "integer" }
+                      }},
+                      "origin": { "properties": {
+                        "id": { "type": "keyword" }, "version": { "type": "keyword" },
+                        "bp_id": { "type": "keyword" },
+                        "created": { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "modified": { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "reference": { "type": "object", "enabled": false }
+                      }},
+                      "data": {}
+                    }
+                  }
+                }
+                """);
+        ValidationResult result = validate(dir, mapping);
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("major_version"));
+    }
+
+    @Test
     void searchItemMissingMinorVersionFails(@TempDir File dir) throws IOException {
         File mapping = write(dir, "mapping.json", """
                 {
@@ -138,7 +169,8 @@ class IndexTypeMappingSchemaValidatorTest {
                     "dynamic": false,
                     "properties": {
                       "search_item": { "properties": {
-                        "upserted_at": { "type": "date", "format": "strict_date_optional_time||epoch_millis" }
+                        "upserted_at": { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+                        "major_version": { "type": "integer" }
                       }},
                       "origin": { "properties": {
                         "id": { "type": "keyword" }, "version": { "type": "keyword" },

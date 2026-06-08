@@ -73,7 +73,7 @@ public class MessageIndexingService {
     }
 
     private void upsert(IndexType<?> indexType, OriginReference originReference, SearchItemResult searchItemResult) {
-        SearchItemMetadata metadata = new SearchItemMetadata(Instant.now(), searchItemResult.indexMinorVersion());
+        SearchItemMetadata metadata = new SearchItemMetadata(Instant.now(), searchItemResult.indexMajorVersion(), searchItemResult.indexMinorVersion());
         SearchItemIndexed<?> searchItemIndexed = toSearchItemIndexed(searchItemResult, indexType, metadata);
 
         validateRequiredFields(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed);

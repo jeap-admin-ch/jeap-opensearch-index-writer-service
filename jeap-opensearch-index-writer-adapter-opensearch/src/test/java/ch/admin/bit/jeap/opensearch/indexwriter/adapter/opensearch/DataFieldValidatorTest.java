@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DataFieldValidatorTest {
 
     private static final String INDEX_WRITE_ALIAS = "orders_v1_write";
+    private static final int MAJOR_VERSION = 1;
     private static final int MINOR_VERSION = 3;
 
     private DataFieldValidator validator;
@@ -112,7 +113,7 @@ class DataFieldValidatorTest {
     private static <T> SearchItemIndexed<T> buildSearchItem(T data) {
         Origin origin = new Origin("id-1", "1", null, null, Instant.now(), Instant.now(), null);
         SearchItem<T> base = new SearchItem<>(origin, data);
-        SearchItemMetadata meta = SearchItemMetadata.initial(MINOR_VERSION);
+        SearchItemMetadata meta = SearchItemMetadata.initial(MAJOR_VERSION, MINOR_VERSION);
         return SearchItemIndexed.of(base, meta);
     }
 }

@@ -25,6 +25,55 @@ class IndexTypeValidatorTest {
     }
 
     @Test
+    void mappingFileNameMajorVersionMismatchFails(@TempDir File tempDir) throws IOException {
+        // Descriptor declares major=1 but mappingDefinition filename contains v2_0
+        String descriptor = """
+                {
+                  "system": "JME",
+                  "originType": "JmeDecreeDocument",
+                  "description": "Major mismatch.",
+                  "roles": ["jme_read"],
+                  "mappingVersions": [
+                    { "major": 1, "minor": 0, "mappingDefinition": "JmeDecreeDocument_mapping_v2_0.json" }
+                  ]
+                }
+                """;
+        File typeDir = typeDir(tempDir);
+        writeDescriptor(typeDir, INDEX_TYPE_NAME, descriptor);
+        // Write the file with the name that the descriptor references (v2_0), not what the major/minor dictate (v1_0)
+        Files.writeString(new File(typeDir, "JmeDecreeDocument_mapping_v2_0.json").toPath(),
+                TestRegistryBuilder.VALID_MAPPING_V1_0);
+        ValidationResult result = validate(tempDir, INDEX_TYPE_NAME);
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("naming convention")
+                && e.contains("JmeDecreeDocument_mapping_v1_0.json"));
+    }
+
+    @Test
+    void mappingFileNameMinorVersionMismatchFails(@TempDir File tempDir) throws IOException {
+        // Descriptor declares minor=0 but mappingDefinition filename contains v1_1
+        String descriptor = """
+                {
+                  "system": "JME",
+                  "originType": "JmeDecreeDocument",
+                  "description": "Minor mismatch.",
+                  "roles": ["jme_read"],
+                  "mappingVersions": [
+                    { "major": 1, "minor": 0, "mappingDefinition": "JmeDecreeDocument_mapping_v1_1.json" }
+                  ]
+                }
+                """;
+        File typeDir = typeDir(tempDir);
+        writeDescriptor(typeDir, INDEX_TYPE_NAME, descriptor);
+        Files.writeString(new File(typeDir, "JmeDecreeDocument_mapping_v1_1.json").toPath(),
+                TestRegistryBuilder.VALID_MAPPING_V1_0);
+        ValidationResult result = validate(tempDir, INDEX_TYPE_NAME);
+        assertThat(result.isValid()).isFalse();
+        assertThat(result.getErrors()).anyMatch(e -> e.contains("naming convention")
+                && e.contains("JmeDecreeDocument_mapping_v1_0.json"));
+    }
+
+    @Test
     void referencedMappingFileMustExist(@TempDir File tempDir) throws IOException {
         File typeDir = typeDir(tempDir);
         writeDescriptor(typeDir, INDEX_TYPE_NAME, TestRegistryBuilder.VALID_DESCRIPTOR);

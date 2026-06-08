@@ -243,6 +243,27 @@ class MessageIndexingServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void upsertSetsMajorVersionInMetadata() {
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        ObjectNode dataNode = JsonNodeFactory.instance.objectNode();
+        SearchItemResult result = new SearchItemResult(2, 5,
+                new SearchItem<>(validOrigin(), dataNode));
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.of(result));
+        when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 2)).thenReturn(Optional.of(indexType));
+        when(indexType.indexWriteAlias()).thenReturn(INDEX_WRITE_ALIAS);
+        when(indexType.dataClass()).thenReturn((Class) TypedData.class);
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        ArgumentCaptor<SearchItemIndexed<?>> captor = ArgumentCaptor.forClass(SearchItemIndexed.class);
+        verify(indexWriter).upsertSearchItem(eq(INDEX_WRITE_ALIAS), eq("id-1"), captor.capture());
+        assertThat(captor.getValue().searchItem().majorVersion()).isEqualTo(2);
+        assertThat(captor.getValue().searchItem().minorVersion()).isEqualTo(5);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void upsertWithTypedDataClass_convertsJsonNodeToTypedPojoBeforeIndexing() {
         stubMessageType("PreziusRegistrationCreated");
         stubReferenceProvider();
