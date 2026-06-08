@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch.OpenSearchClient;
+import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.Refresh;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.testcontainers.OpensearchContainer;
@@ -28,7 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -36,13 +36,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Spins up a single-node OpenSearch container and drives {@link SearchItemClient#read}
- * and {@link SearchItemClient#search} through the real HTTP API. Auth is supplied as
+ * Spins up a single-node OpenSearch container and drives {@link SearchItemClient}
+ * multi-version search methods through the real HTTP API. Auth is supplied as
  * synthetic {@link Authorization} records so both global-role and BP-role branches run.
- *
- * <p>{@code webEnvironment = NONE} keeps Tomcat out of the slice. Image tag is pinned
- * to a build that needs no initial-password handshake; if it cannot be pulled, try
- * {@code 2.14.0} or {@code 2.18.0}.
  */
 @SpringBootTest(classes = TestConfig.class, webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers
@@ -50,10 +46,11 @@ class SearchItemClientIT {
 
     private static final String OPENSEARCH_IMAGE = "opensearchproject/opensearch:2.11.1";
 
-    private static final String INDEX = "inspection_test_v1";
-
     private static final TestIndexType INDEX_TYPE =
             new TestIndexType("InspectionTest", List.of("inspection_read", "inspection_read_bp"));
+
+    private static final TestIndexTypeV2 INDEX_TYPE_V2 =
+            new TestIndexTypeV2("InspectionTest", List.of("inspection_read", "inspection_read_bp"));
 
     @Container
     static final OpensearchContainer<?> opensearch = new OpensearchContainer<>(OPENSEARCH_IMAGE);
@@ -73,6 +70,7 @@ class SearchItemClientIT {
     private ObjectMapper objectMapper;
 
     private static volatile boolean indexInitialised;
+    private static volatile boolean multiVersionIndexInitialised;
 
     /**
      * Lazy index setup so we don't depend on a static @BeforeAll having access to the
@@ -82,9 +80,8 @@ class SearchItemClientIT {
         if (indexInitialised) {
             return;
         }
-        // Explicit keyword mapping so term-queries match without the .keyword sub-field.
         openSearchClient.indices().create(b -> b
-                .index(INDEX)
+                .index(INDEX_TYPE.indexReadAlias())
                 .mappings(m -> m
                         .properties("origin", p -> p.object(o -> o
                                 .properties("id", pp -> pp.keyword(k -> k))
@@ -96,23 +93,15 @@ class SearchItemClientIT {
         indexDocument("doc-1", "BP1", "alpha");
         indexDocument("doc-2", "BP2", "beta");
         indexDocument("doc-3", null, "gamma");
-        // Same origin.id in two BPs — exercises the asymmetric uniqueness check between
-        // readUnchecked and read(..., auth). Distinct OpenSearch _id lets both coexist.
-        indexDocumentWithDocId("dup-1-bp1", "dup-1", "BP1", "dup-own");
-        indexDocumentWithDocId("dup-1-bp2", "dup-1", "BP2", "dup-foreign");
 
-        openSearchClient.indices().refresh(r -> r.index(INDEX));
+        openSearchClient.indices().refresh(r -> r.index(INDEX_TYPE.indexReadAlias()));
         indexInitialised = true;
     }
 
     private void indexDocument(String id, String bpId, String label) throws IOException {
-        indexDocumentWithDocId(id, id, bpId, label);
-    }
-
-    private void indexDocumentWithDocId(String docId, String originId, String bpId, String label) throws IOException {
         ObjectNode root = objectMapper.createObjectNode();
         ObjectNode originNode = root.putObject("origin");
-        originNode.put("id", originId);
+        originNode.put("id", id);
         originNode.put("version", "1");
         if (bpId == null) {
             originNode.putNull("bp_id");
@@ -122,179 +111,203 @@ class SearchItemClientIT {
         originNode.putNull("tenant");
         ObjectNode dataNode = root.putObject("data");
         dataNode.put("label", label);
+        root.putObject("search_item").put("major_version", 1);
 
         openSearchClient.index(i -> i
-                .index(INDEX)
-                .id(docId)
+                .index(INDEX_TYPE.indexReadAlias())
+                .id(id)
                 .document(root)
                 .refresh(Refresh.True));
     }
 
     @Test
-    void read_globalRoleAuth_findsDocument_andDeserialisesIt() throws IOException {
+    void searchMultiVersion_globalRoleAuth_findsDocumentAndDeserialisesIt() throws IOException {
         ensureIndex();
         Authorization globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        Optional<SearchItemTyped<TestData>> result =
-                searchItemClient.read(INDEX_TYPE, List.of(INDEX), "doc-1", globalAuth);
+        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+                List.of(INDEX_TYPE),
+                Query.of(q -> q.term(t -> t.field("origin.id").value(FieldValue.of("doc-1")))),
+                globalAuth);
 
-        assertThat(result).isPresent();
-        SearchItemTyped<TestData> item = result.orElseThrow();
+        assertThat(result).hasSize(1);
+        SearchItemTyped<?> item = result.getFirst();
         Origin origin = item.origin();
         assertThat(origin.id()).isEqualTo("doc-1");
         assertThat(origin.bpId()).isEqualTo("BP1");
-        assertThat(item.data().label()).isEqualTo("alpha");
+        assertThat(((TestData) item.data()).label()).isEqualTo("alpha");
         assertThat(item.indexType()).isSameAs(INDEX_TYPE);
     }
 
     @Test
-    void read_wrongRoleAuth_throwsIndexTypeAccessDeniedException() throws IOException {
+    void searchMultiVersion_wrongRoleAuth_throwsIndexTypeAccessDeniedException() throws IOException {
         ensureIndex();
         Authorization wrongAuth = new Authorization(Set.of("not-a-real-role"), Map.of());
-        List<String> indices = List.of(INDEX);
 
         assertThatThrownBy(() ->
-                searchItemClient.read(INDEX_TYPE, indices, "doc-1", wrongAuth))
+                searchItemClient.searchMultiVersion(
+                        List.of(INDEX_TYPE),
+                        Query.of(q -> q.matchAll(m -> m)),
+                        wrongAuth))
                 .isInstanceOf(IndexTypeAccessDeniedException.class);
     }
 
     @Test
-    void read_nonExistentId_returnsEmpty() throws IOException {
+    void searchMultiVersion_nonExistentId_returnsEmpty() throws IOException {
         ensureIndex();
         Authorization globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        Optional<SearchItemTyped<TestData>> result =
-                searchItemClient.read(INDEX_TYPE, List.of(INDEX), "does-not-exist", globalAuth);
+        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+                List.of(INDEX_TYPE),
+                Query.of(q -> q.term(t -> t.field("origin.id").value(FieldValue.of("does-not-exist")))),
+                globalAuth);
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    void search_matchAll_withGlobalRole_returnsAllDocuments() throws IOException {
+    void searchMultiVersion_matchAll_withGlobalRole_returnsAllDocuments() throws IOException {
         ensureIndex();
         Authorization globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        List<SearchItemTyped<TestData>> result = searchItemClient.search(
-                INDEX_TYPE, List.of(INDEX),
+        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+                List.of(INDEX_TYPE),
                 Query.of(q -> q.matchAll(m -> m)),
                 globalAuth);
 
         assertThat(result)
                 .extracting(item -> item.origin().id())
-                .containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3", "dup-1", "dup-1");
+                .containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3");
     }
 
     @Test
-    void search_matchAll_withBp1OnlyRole_returnsOnlyBp1Documents() throws IOException {
+    void searchMultiVersion_matchAll_withBp1OnlyRole_returnsOnlyBp1Documents() throws IOException {
         ensureIndex();
         Authorization bp1Auth = new Authorization(
                 Set.of(),
                 Map.of("BP1", Set.of("inspection_read_bp")));
 
-        List<SearchItemTyped<TestData>> result = searchItemClient.search(
-                INDEX_TYPE, List.of(INDEX),
+        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+                List.of(INDEX_TYPE),
                 Query.of(q -> q.matchAll(m -> m)),
                 bp1Auth);
 
         assertThat(result)
                 .extracting(item -> item.origin().id())
-                .containsExactlyInAnyOrder("doc-1", "dup-1");
+                .containsExactly("doc-1");
     }
 
     @Test
-    void searchUnchecked_returnsAllDocuments_withoutAuthChecks() throws IOException {
+    void searchMultiVersionUnchecked_returnsAllDocuments_withoutAuthChecks() throws IOException {
         ensureIndex();
 
-        List<SearchItemTyped<TestData>> result = searchItemClient.searchUnchecked(
-                INDEX_TYPE, List.of(INDEX),
+        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersionUnchecked(
+                List.of(INDEX_TYPE),
                 Query.of(q -> q.matchAll(m -> m)));
 
         assertThat(result)
                 .extracting(item -> item.origin().id())
-                .containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3", "dup-1", "dup-1");
+                .containsExactlyInAnyOrder("doc-1", "doc-2", "doc-3");
+    }
+
+    // ── multi-version dispatch (v1 + v2 in the same read alias) ──────────────
+
+    /**
+     * Lazy setup for the multi-version index: creates the index and indexes one V1 and one V2
+     * document under the shared read-alias derived from both TestIndexType and TestIndexTypeV2.
+     */
+    private synchronized void ensureMultiVersionIndex() throws IOException {
+        if (multiVersionIndexInitialised) {
+            return;
+        }
+        String alias = INDEX_TYPE_V2.indexReadAlias() + "_mv";
+        openSearchClient.indices().create(b -> b
+                .index(alias)
+                .mappings(m -> m
+                        .properties("origin", p -> p.object(o -> o
+                                .properties("id", pp -> pp.keyword(k -> k))
+                                .properties("bp_id", pp -> pp.keyword(k -> k))
+                                .properties("tenant", pp -> pp.keyword(k -> k))))
+                        .properties("data", p -> p.object(o -> o
+                                .properties("label", pp -> pp.keyword(k -> k))
+                                .properties("name", pp -> pp.keyword(k -> k))))
+                        .properties("search_item", p -> p.object(o -> o
+                                .properties("major_version", pp -> pp.integer(i -> i))))));
+
+        indexVersionedDocument(alias, "mv-doc-v1", null, "v1-label", null, 1);
+        indexVersionedDocument(alias, "mv-doc-v2", null, null, "v2-name", 2);
+        indexVersionedDocument(alias, "mv-doc-unknown", null, "x", null, 99);
+
+        openSearchClient.indices().refresh(r -> r.index(alias));
+        multiVersionIndexInitialised = true;
+    }
+
+    private void indexVersionedDocument(String index, String id, String bpId,
+                                        String label, String name, int majorVersion) throws IOException {
+        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode originNode = root.putObject("origin");
+        originNode.put("id", id);
+        originNode.put("version", "1");
+        if (bpId == null) originNode.putNull("bp_id"); else originNode.put("bp_id", bpId);
+        originNode.putNull("tenant");
+        ObjectNode dataNode = root.putObject("data");
+        if (label != null) dataNode.put("label", label);
+        if (name != null) dataNode.put("name", name);
+        root.putObject("search_item").put("major_version", majorVersion);
+        openSearchClient.index(i -> i.index(index).id(id).document(root).refresh(Refresh.True));
+    }
+
+    /** Returns a version of INDEX_TYPE_V2 that uses the multi-version alias. */
+    private static TestIndexTypeWithAlias mvIndexTypeV1() {
+        return new TestIndexTypeWithAlias(INDEX_TYPE, INDEX_TYPE_V2.indexReadAlias() + "_mv");
+    }
+
+    private static TestIndexTypeWithAlias mvIndexTypeV2() {
+        return new TestIndexTypeWithAlias(INDEX_TYPE_V2, INDEX_TYPE_V2.indexReadAlias() + "_mv");
     }
 
     @Test
-    void readUnchecked_returnsDocument_withoutAuthChecks() throws IOException {
-        ensureIndex();
+    void searchMultiVersion_v1AndV2Docs_dispatchedToCorrectDataClass() throws IOException {
+        ensureMultiVersionIndex();
+        Authorization auth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        Optional<SearchItemTyped<TestData>> result =
-                searchItemClient.readUnchecked(INDEX_TYPE, List.of(INDEX), "doc-1");
+        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+                List.of(mvIndexTypeV1(), mvIndexTypeV2()),
+                Query.of(q -> q.terms(t -> t.field("origin.id")
+                        .terms(tf -> tf.value(List.of(
+                                FieldValue.of("mv-doc-v1"),
+                                FieldValue.of("mv-doc-v2")))))),
+                auth);
 
-        assertThat(result).isPresent();
-        assertThat(result.orElseThrow().origin().id()).isEqualTo("doc-1");
+        assertThat(result).hasSize(2);
+        SearchItemTyped<?> v1Item = result.stream()
+                .filter(it -> "mv-doc-v1".equals(it.origin().id())).findFirst().orElseThrow();
+        SearchItemTyped<?> v2Item = result.stream()
+                .filter(it -> "mv-doc-v2".equals(it.origin().id())).findFirst().orElseThrow();
+        assertThat(v1Item.data()).isInstanceOf(TestData.class);
+        assertThat(((TestData) v1Item.data()).label()).isEqualTo("v1-label");
+        assertThat(v2Item.data()).isInstanceOf(TestDataV2.class);
+        assertThat(((TestDataV2) v2Item.data()).name()).isEqualTo("v2-name");
     }
 
     @Test
-    void read_bp1OnlyRole_foreignBpDocument_returnsEmpty() throws IOException {
-        // A non-authorised hit is silently filtered out — read returns empty, doesn't throw.
-        ensureIndex();
-        Authorization bp1Auth = new Authorization(
-                Set.of(),
-                Map.of("BP1", Set.of("inspection_read_bp")));
+    void searchMultiVersion_unknownMajorVersion_throwsSearchItemClientException() throws IOException {
+        ensureMultiVersionIndex();
+        Authorization auth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        // doc-2 belongs to BP2 → not visible to the BP1-only user.
-        Optional<SearchItemTyped<TestData>> result =
-                searchItemClient.read(INDEX_TYPE, List.of(INDEX), "doc-2", bp1Auth);
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void read_bp1OnlyRole_ownBpDocument_returnsItem() throws IOException {
-        ensureIndex();
-        Authorization bp1Auth = new Authorization(
-                Set.of(),
-                Map.of("BP1", Set.of("inspection_read_bp")));
-
-        Optional<SearchItemTyped<TestData>> result =
-                searchItemClient.read(INDEX_TYPE, List.of(INDEX), "doc-1", bp1Auth);
-
-        assertThat(result).isPresent();
-        assertThat(result.orElseThrow().origin().bpId()).isEqualTo("BP1");
-    }
-
-    @Test
-    void read_bp1OnlyAuth_duplicateIdInForeignBp_returnsOnlyOwnItem_noException() throws IOException {
-        // dup-1 exists in both BP1 and BP2; auth-scope uniqueness hides the foreign duplicate.
-        ensureIndex();
-        Authorization bp1Auth = new Authorization(
-                Set.of(),
-                Map.of("BP1", Set.of("inspection_read_bp")));
-
-        Optional<SearchItemTyped<TestData>> result =
-                searchItemClient.read(INDEX_TYPE, List.of(INDEX), "dup-1", bp1Auth);
-
-        assertThat(result).isPresent();
-        assertThat(result.orElseThrow().origin().bpId()).isEqualTo("BP1");
-        assertThat(result.orElseThrow().data().label()).isEqualTo("dup-own");
-    }
-
-    @Test
-    void readUnchecked_duplicateIdAcrossBps_throwsMultipleSearchItemsFoundException() throws IOException {
-        // readUnchecked enforces global uniqueness — admin/reporting paths see the inconsistency.
-        ensureIndex();
-        List<String> indices = List.of(INDEX);
-
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                searchItemClient.readUnchecked(INDEX_TYPE, indices, "dup-1"))
-                .isInstanceOf(MultipleSearchItemsFoundException.class);
-    }
-
-    @Test
-    void read_globalAuth_duplicateIdAcrossBps_throwsMultipleSearchItemsFoundException() throws IOException {
-        // Global role → no BP pre-filter → post-filter keeps both hits → exception surfaces.
-        ensureIndex();
-        Authorization globalAuth = new Authorization(
-                Set.of("inspection_read"), Map.of());
-        List<String> indices = List.of(INDEX);
-
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                searchItemClient.read(INDEX_TYPE, indices, "dup-1", globalAuth))
-                .isInstanceOf(MultipleSearchItemsFoundException.class);
+        assertThatThrownBy(() ->
+                searchItemClient.searchMultiVersion(
+                        List.of(mvIndexTypeV1(), mvIndexTypeV2()),
+                        Query.of(q -> q.term(t -> t.field("origin.id").value(FieldValue.of("mv-doc-unknown")))),
+                        auth))
+                .isInstanceOf(SearchItemClientException.class)
+                .hasMessageContaining("99");
     }
 
     public record TestData(String label) {
+    }
+
+    public record TestDataV2(String name) {
     }
 
     static final class TestIndexType implements IndexType<TestData> {
@@ -311,7 +324,7 @@ class SearchItemClientIT {
         @Override public String originType() { return originType; }
         @Override public int majorVersion() { return 1; }
         @Override public int minorVersion() { return 0; }
-        @Override public String description() { return "Integration-test index type"; }
+        @Override public String description() { return "Integration-test index type v1"; }
         @Override public String documentationUrl() { return "https://example.test/doc"; }
         @Override public List<String> roles() { return roles; }
         @Override public Supplier<InputStream> mappingDefinition() {
@@ -319,8 +332,51 @@ class SearchItemClientIT {
         }
     }
 
+    static final class TestIndexTypeV2 implements IndexType<TestDataV2> {
+        private final String originType;
+        private final List<String> roles;
+
+        TestIndexTypeV2(String originType, List<String> roles) {
+            this.originType = originType;
+            this.roles = List.copyOf(roles);
+        }
+
+        @Override public Class<TestDataV2> dataClass() { return TestDataV2.class; }
+        @Override public String system() { return "jme"; }
+        @Override public String originType() { return originType; }
+        @Override public int majorVersion() { return 2; }
+        @Override public int minorVersion() { return 0; }
+        @Override public String description() { return "Integration-test index type v2"; }
+        @Override public String documentationUrl() { return "https://example.test/doc"; }
+        @Override public List<String> roles() { return roles; }
+        @Override public Supplier<InputStream> mappingDefinition() {
+            return () -> new ByteArrayInputStream("{}".getBytes());
+        }
+    }
+
+    /** Wraps an existing IndexType but overrides the indexReadAlias for test isolation. */
+    static final class TestIndexTypeWithAlias<T> implements IndexType<T> {
+        private final IndexType<T> delegate;
+        private final String alias;
+
+        TestIndexTypeWithAlias(IndexType<T> delegate, String alias) {
+            this.delegate = delegate;
+            this.alias = alias;
+        }
+
+        @Override public Class<T> dataClass() { return delegate.dataClass(); }
+        @Override public String system() { return delegate.system(); }
+        @Override public String originType() { return delegate.originType(); }
+        @Override public int majorVersion() { return delegate.majorVersion(); }
+        @Override public int minorVersion() { return delegate.minorVersion(); }
+        @Override public String description() { return delegate.description(); }
+        @Override public String documentationUrl() { return delegate.documentationUrl(); }
+        @Override public List<String> roles() { return delegate.roles(); }
+        @Override public Supplier<InputStream> mappingDefinition() { return delegate.mappingDefinition(); }
+        @Override public String indexReadAlias() { return alias; }
+    }
+
     @SpringBootApplication(
-            // Disable component scan — only the imported auto-configurations should contribute beans.
             scanBasePackages = "ch.admin.bit.jeap.opensearch.client.search.empty"
     )
     @ImportAutoConfiguration({

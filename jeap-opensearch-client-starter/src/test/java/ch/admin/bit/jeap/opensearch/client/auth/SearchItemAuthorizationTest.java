@@ -103,48 +103,6 @@ class SearchItemAuthorizationTest {
     }
 
     @Nested
-    class CheckAuthorization {
-
-        @Test
-        void authorized_doesNotThrow() {
-            SearchItemTyped<String> item = AuthTestData.searchItem("bp-1", INDEX_TYPE_READ);
-            Authorization auth = new Authorization(Set.of("read"), Map.of());
-
-            sut.checkAuthorization(item, auth);
-        }
-
-        @Test
-        void notAuthorized_throwsSearchItemAccessDeniedException() {
-            SearchItemTyped<String> item = AuthTestData.searchItem("bp-1", INDEX_TYPE_READ);
-            Authorization auth = new Authorization(Set.of("other"), Map.of());
-
-            assertThatThrownBy(() -> sut.checkAuthorization(item, auth))
-                    .isInstanceOf(SearchItemAccessDeniedException.class);
-        }
-
-        @Test
-        void notAuthorized_exceptionCarriesSearchItem() {
-            SearchItemTyped<String> item = AuthTestData.searchItem("bp-1", INDEX_TYPE_READ);
-            Authorization auth = new Authorization(Set.of("other"), Map.of());
-
-            try {
-                sut.checkAuthorization(item, auth);
-                org.assertj.core.api.Assertions.fail("expected SearchItemAccessDeniedException");
-            } catch (SearchItemAccessDeniedException ex) {
-                assertThat(ex.getSearchItem()).isSameAs(item);
-            }
-        }
-
-        @Test
-        void nullAuthorization_alsoThrowsBecauseIsAuthorizedReturnsFalse() {
-            SearchItemTyped<String> item = AuthTestData.searchItem("bp-1", INDEX_TYPE_READ);
-
-            assertThatThrownBy(() -> sut.checkAuthorization(item, null))
-                    .isInstanceOf(SearchItemAccessDeniedException.class);
-        }
-    }
-
-    @Nested
     class FilterByAuthorization {
 
         @Test
@@ -234,6 +192,36 @@ class SearchItemAuthorizationTest {
             List<SearchItemTyped<String>> result = sut.filterByAuthorization(List.of(a, b, c), auth);
 
             assertThat(result).containsExactly(a, b, c);
+        }
+    }
+
+    @Nested
+    class FilterByAuthorizationWithExplicitRoles {
+
+        @Test
+        void usesProvidedRolesInsteadOfItemIndexTypeRoles() {
+            // The item's indexType has role "read", but we pass "other_role" as required
+            SearchItemTyped<String> item = AuthTestData.searchItem("bp-1", INDEX_TYPE_READ);
+            Authorization auth = new Authorization(Set.of("other_role"), Map.of());
+
+            // With item's own roles ("read"), auth would be denied; with "other_role", it is allowed
+            assertThat(sut.filterByAuthorization(List.of(item), auth)).isEmpty();
+            assertThat(sut.filterByAuthorization(List.of(item), auth, List.of("other_role")))
+                    .containsExactly(item);
+        }
+
+        @Test
+        void latestVersionRolesUsed_olderVersionItemStillAllowed() {
+            // Simulate a v1 item whose indexType has role "v1_role",
+            // but we use the latest version's role "v2_role" for all auth decisions
+            IndexType<String> v1Type = new AuthTestData.TestStringIndexType(List.of("v1_role"));
+            SearchItemTyped<String> v1Item = AuthTestData.searchItemWithId("id-1", "bp-1", v1Type);
+            Authorization auth = new Authorization(Set.of("v2_role"), Map.of());
+
+            // Using item's own roles ("v1_role") → denied; using latest ("v2_role") → allowed
+            assertThat(sut.filterByAuthorization(List.of(v1Item), auth)).isEmpty();
+            assertThat(sut.filterByAuthorization(List.of(v1Item), auth, List.of("v2_role")))
+                    .containsExactly(v1Item);
         }
     }
 }

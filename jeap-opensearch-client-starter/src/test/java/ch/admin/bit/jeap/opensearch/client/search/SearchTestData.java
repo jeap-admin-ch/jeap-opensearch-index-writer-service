@@ -20,6 +20,9 @@ final class SearchTestData {
     record TestData(String label) {
     }
 
+    record TestDataV2(String name) {
+    }
+
     static final class TestIndexType implements IndexType<TestData> {
         private final String originType;
         private final List<String> roles;
@@ -86,6 +89,65 @@ final class SearchTestData {
         }
     }
 
+    static final class TestIndexTypeV2 implements IndexType<TestDataV2> {
+        private final List<String> roles;
+        private final String systemOverride;
+
+        TestIndexTypeV2(List<String> roles) {
+            this(roles, null);
+        }
+
+        TestIndexTypeV2(List<String> roles, String systemOverride) {
+            this.roles = List.copyOf(roles);
+            this.systemOverride = systemOverride;
+        }
+
+        @Override
+        public Class<TestDataV2> dataClass() {
+            return TestDataV2.class;
+        }
+
+        @Override
+        public String system() {
+            return systemOverride != null ? systemOverride : "jme";
+        }
+
+        @Override
+        public String originType() {
+            return ORIGIN_TYPE;
+        }
+
+        @Override
+        public int majorVersion() {
+            return 2;
+        }
+
+        @Override
+        public int minorVersion() {
+            return 0;
+        }
+
+        @Override
+        public String description() {
+            return "test v2";
+        }
+
+        @Override
+        public String documentationUrl() {
+            return "https://example.test/doc";
+        }
+
+        @Override
+        public List<String> roles() {
+            return roles;
+        }
+
+        @Override
+        public Supplier<InputStream> mappingDefinition() {
+            return () -> new ByteArrayInputStream("{}".getBytes());
+        }
+    }
+
     /**
      * Source JSON for a hit. {@code created}/{@code modified} are intentionally omitted —
      * Jackson's vanilla {@code ObjectMapper} doesn't handle {@link java.time.Instant}
@@ -104,6 +166,31 @@ final class SearchTestData {
         originNode.putNull("tenant");
         ObjectNode dataNode = root.putObject("data");
         dataNode.put("label", label);
+        return root;
+    }
+
+    /**
+     * Source JSON for a multi-version hit — includes a {@code search_item.major_version}
+     * field so that the multi-version dispatch logic can route to the correct
+     * {@link IndexType}.
+     */
+    static JsonNode sourceJsonWithMajorVersion(ObjectMapper objectMapper,
+            String id, String bpId, String dataFieldName, String dataFieldValue,
+            int majorVersion) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode originNode = root.putObject("origin");
+        originNode.put("id", id);
+        originNode.put("version", "1");
+        if (bpId == null) {
+            originNode.putNull("bp_id");
+        } else {
+            originNode.put("bp_id", bpId);
+        }
+        originNode.putNull("tenant");
+        ObjectNode dataNode = root.putObject("data");
+        dataNode.put(dataFieldName, dataFieldValue);
+        ObjectNode searchItemNode = root.putObject("search_item");
+        searchItemNode.put("major_version", majorVersion);
         return root;
     }
 

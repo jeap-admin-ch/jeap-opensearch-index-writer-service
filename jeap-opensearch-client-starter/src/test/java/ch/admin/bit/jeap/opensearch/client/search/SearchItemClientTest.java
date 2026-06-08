@@ -7,12 +7,15 @@ import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestData;
+import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestDataV2;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestIndexType;
+import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestIndexTypeV2;
+import ch.admin.bit.jeap.opensearch.indextype.IndexType;
+import ch.admin.bit.jeap.opensearch.client.search.SearchItemClientException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.junit.jupiter.api.BeforeEach;
+import com.fasterxml.jackson.databind.node.ObjectNode;import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,9 +26,7 @@ import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.ErrorCause;
 import org.opensearch.client.opensearch._types.ErrorResponse;
 import org.opensearch.client.opensearch._types.OpenSearchException;
-import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
-import org.opensearch.client.opensearch._types.query_dsl.TermsQuery;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
@@ -34,7 +35,6 @@ import org.opensearch.client.opensearch.core.search.HitsMetadata;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,15 +58,20 @@ class SearchItemClientTest {
     @Mock
     private UserSearchItemAuthorization userSearchItemAuthorization;
 
+    @Mock
+    private IndexTypeAuthorization mockIndexTypeAuthorization;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final IndexTypeAuthorization indexTypeAuthorization = new IndexTypeAuthorization();
 
     private TestIndexType indexType;
+    private TestIndexTypeV2 indexTypeV2;
     private Authorization globalAuth;
 
     @BeforeEach
     void setUp() {
         indexType = new TestIndexType(List.of("inspection_read"));
+        indexTypeV2 = new TestIndexTypeV2(List.of("inspection_read"));
         globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
     }
 
@@ -114,529 +119,6 @@ class SearchItemClientTest {
     }
 
     @Nested
-    class SearchUnchecked {
-
-        @Test
-        void noAuthChecks_passThroughEmptyAuth() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            List<SearchItemTyped<TestData>> result = sut.searchUnchecked(
-                    indexType, List.of("idx_v1"),
-                    Query.of(q -> q.matchAll(m -> m)), null);
-
-            assertThat(result).isEmpty();
-            org.mockito.Mockito.verifyNoInteractions(userSearchItemAuthorization);
-            org.mockito.Mockito.verifyNoInteractions(searchItemAuthorization);
-        }
-
-        @Test
-        void deserialisesHits_andDoesNotFilterByAuthorization() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode s1 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            JsonNode s2 = SearchTestData.sourceJson(objectMapper, "id-2", "BP2", "beta");
-            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
-
-            List<SearchItemTyped<TestData>> result = sut.searchUnchecked(
-                    indexType, List.of("idx_v1"), Query.of(q -> q.matchAll(m -> m)));
-
-            assertThat(result).hasSize(2);
-            assertThat(result).extracting(it -> it.origin().id()).containsExactly("id-1", "id-2");
-            org.mockito.Mockito.verifyNoInteractions(searchItemAuthorization);
-        }
-
-        @Test
-        void customizer_appliedAfterIndexAndQuery() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            sut.searchUnchecked(indexType, List.of("idx_v1"),
-                    Query.of(q -> q.matchAll(m -> m)), b -> b.size(20));
-
-            SearchRequest req = captureSearchRequest();
-            assertThat(req.size()).isEqualTo(20);
-            assertThat(req.index()).containsExactly("idx_v1");
-        }
-
-        @Test
-        void nullCustomizer_isAccepted() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            sut.searchUnchecked(indexType, List.of("idx_v1"), Query.of(q -> q.matchAll(m -> m)), null);
-
-            captureSearchRequest();
-        }
-
-        @Test
-        void convenienceWithoutIndices_usesIndexReadAlias() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            sut.searchUnchecked(indexType, Query.of(q -> q.matchAll(m -> m)));
-
-            assertThat(captureSearchRequest().index()).containsExactly(indexType.indexReadAlias());
-        }
-
-        @Test
-        void allFourOverloadsCompile_andRun() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            Query q = Query.of(qb -> qb.matchAll(m -> m));
-
-            assertThat(sut.searchUnchecked(indexType, List.of("idx_v1"), q, b -> b.size(5))).isEmpty();
-            assertThat(sut.searchUnchecked(indexType, List.of("idx_v1"), q)).isEmpty();
-            assertThat(sut.searchUnchecked(indexType, q, b -> b.size(5))).isEmpty();
-            assertThat(sut.searchUnchecked(indexType, q)).isEmpty();
-        }
-
-        @Test
-        void hitWithNullSource_isSilentlyDropped() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode source = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            whenSearchReturnsHits(List.of(mockHit("d1", source), mockHit("d2", null)));
-
-            List<SearchItemTyped<TestData>> result = sut.searchUnchecked(
-                    indexType, List.of("idx_v1"), Query.of(q -> q.matchAll(m -> m)));
-
-            assertThat(result).hasSize(1);
-        }
-    }
-
-    @SuppressWarnings("DataFlowIssue")
-    @Nested
-    class SearchWithAuth {
-
-        @Test
-        void nullAuth_throwsNoAuthorization() throws IOException {
-            SearchItemClient sut = newClient();
-            Authorization nullAuth = null;
-            List<String> indices = List.of("idx_v1");
-            Query query = Query.of(q -> q.matchAll(m -> m));
-
-            assertThatThrownBy(() ->
-                    sut.search(indexType, indices, query, nullAuth))
-                    .isInstanceOfSatisfying(IndexTypeAccessDeniedException.class, ex -> {
-                        assertThat(ex.getIndexType()).isSameAs(indexType);
-                        assertThat(ex.getMessage()).contains("no authorization");
-                    });
-
-            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
-        }
-
-        @Test
-        void notAuthorized_throwsIndexTypeAccessDenied() throws IOException {
-            SearchItemClient sut = newClient();
-            Authorization wrongAuth = new Authorization(Set.of("other_role"), Map.of());
-            List<String> indices = List.of("idx_v1");
-            Query query = Query.of(q -> q.matchAll(m -> m));
-
-            assertThatThrownBy(() ->
-                    sut.search(indexType, indices, query, wrongAuth))
-                    .isInstanceOfSatisfying(IndexTypeAccessDeniedException.class,
-                            ex -> assertThat(ex.getMessage())
-                                    .contains(indexType.getClass().getSimpleName()));
-
-            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
-        }
-
-        @Test
-        void globalUserrole_noBpPreFilterApplied_queryPassedThroughUnchanged() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-            Query original = Query.of(q -> q.matchAll(m -> m));
-
-            sut.search(indexType, List.of("idx_v1"), original, globalAuth);
-
-            SearchRequest req = captureSearchRequest();
-            assertThat(req.query()).isSameAs(original);
-        }
-
-        @Test
-        void bpOnlyAuth_appliesBpPreFilter_wrappingQueryInBool() throws IOException {
-            // Expects bool { must: query, filter: BP-filter } when no global userrole grants access.
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            Authorization bpAuth = bpOnlyAuth("BP1");
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(bpAuth)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            sut.search(indexType, List.of("idx_v1"),
-                    Query.of(q -> q.matchAll(m -> m)), bpAuth);
-
-            Query effective = captureSearchRequest().query();
-            assertThat(effective.isBool()).isTrue();
-            BoolQuery bool = effective.bool();
-            assertThat(bool.must()).hasSize(1);
-            assertThat(bool.must().getFirst().isMatchAll()).isTrue();
-            assertThat(bool.filter()).hasSize(1);
-            Query filter = bool.filter().getFirst();
-            assertThat(filter.isTerms()).isTrue();
-            TermsQuery terms = filter.terms();
-            assertThat(terms.field()).isEqualTo("origin.bp_id");
-            List<String> values = terms.terms().value().stream()
-                    .map(fv -> fv.isString() ? fv.stringValue() : fv.toString())
-                    .toList();
-            assertThat(values).containsExactly("BP1");
-        }
-
-        @Test
-        void multipleBps_areAllIncludedInPreFilter() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            Authorization multiBp = new Authorization(
-                    Set.of(),
-                    Map.of(
-                            "BP1", Set.of("inspection_read"),
-                            "BP2", Set.of("inspection_read"),
-                            "BP3", Set.of("other_role")));
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(multiBp)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            sut.search(indexType, List.of("idx_v1"),
-                    Query.of(q -> q.matchAll(m -> m)), multiBp);
-
-            BoolQuery bool = captureSearchRequest().query().bool();
-            List<String> values = bool.filter().getFirst().terms().terms().value().stream()
-                    .map(fv -> fv.isString() ? fv.stringValue() : fv.toString())
-                    .toList();
-            assertThat(values).containsExactlyInAnyOrder("BP1", "BP2");
-        }
-
-        @Test
-        void bpSetEmpty_failsFast_throwsIllegalStateException() throws IOException {
-            // If a mocked checkAccess lets a no-userrole/empty-BP auth through, the pre-filter
-            // stage must refuse rather than issue an effectively unfiltered OpenSearch query.
-            IndexTypeAuthorization mockedIndexTypeAuth = org.mockito.Mockito.mock(IndexTypeAuthorization.class);
-            SearchItemClient sut = new SearchItemClient(
-                    openSearchClient, objectMapper, mockedIndexTypeAuth,
-                    searchItemAuthorization, userSearchItemAuthorization);
-            Authorization emptyAuth = new Authorization(Set.of(), Map.of());
-            List<String> indices = List.of("idx_v1");
-            Query query = Query.of(q -> q.matchAll(m -> m));
-
-            assertThatThrownBy(() ->
-                    sut.search(indexType, indices, query, emptyAuth))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("Invariant violated")
-                    .hasMessageContaining(indexType.getClass().getSimpleName());
-
-            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
-        }
-
-        @Test
-        void postFilter_dropsUnauthorisedItems() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode s1 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            JsonNode s2 = SearchTestData.sourceJson(objectMapper, "id-2", "BP2", "beta");
-            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth)))
-                    .thenAnswer(inv -> {
-                        List<SearchItemTyped<TestData>> input = inv.getArgument(0);
-                        return input.stream().filter(it -> !"id-2".equals(it.origin().id())).toList();
-                    });
-
-            List<SearchItemTyped<TestData>> result = sut.search(
-                    indexType, List.of("idx_v1"),
-                    Query.of(q -> q.matchAll(m -> m)), globalAuth);
-
-            assertThat(result).extracting(it -> it.origin().id()).containsExactly("id-1");
-        }
-
-        @Test
-        void allFourOverloadsCompile_andRun() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(searchItemAuthorization.filterByAuthorization(any(), any())).thenReturn(List.of());
-            Query q = Query.of(qb -> qb.matchAll(m -> m));
-
-            assertThat(sut.search(indexType, List.of("idx_v1"), q, b -> b.size(5), globalAuth)).isEmpty();
-            assertThat(sut.search(indexType, List.of("idx_v1"), q, globalAuth)).isEmpty();
-            assertThat(sut.search(indexType, q, b -> b.size(5), globalAuth)).isEmpty();
-            assertThat(sut.search(indexType, q, globalAuth)).isEmpty();
-        }
-    }
-
-    @Nested
-    class SearchWithUserAuth {
-
-        @Test
-        void providerNull_routesIntoNoAuthorization() throws IOException {
-            SearchItemClient sut = newClient();
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(null);
-            List<String> indices = List.of("idx_v1");
-            Query query = Query.of(q -> q.matchAll(m -> m));
-
-            assertThatThrownBy(() ->
-                    sut.searchWithUserAuth(indexType, indices, query))
-                    .isInstanceOf(IndexTypeAccessDeniedException.class);
-
-            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
-        }
-
-        @Test
-        void providerReturnsAuth_isThreadedThroughToPostFilter() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth))).thenReturn(List.of());
-
-            sut.searchWithUserAuth(indexType, List.of("idx_v1"), Query.of(q -> q.matchAll(m -> m)));
-
-            verify(searchItemAuthorization).filterByAuthorization(any(), eq(globalAuth));
-        }
-
-        @Test
-        void allFourOverloadsCompile_andRun() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
-            when(searchItemAuthorization.filterByAuthorization(any(), any())).thenReturn(List.of());
-            Query q = Query.of(qb -> qb.matchAll(m -> m));
-
-            assertThat(sut.searchWithUserAuth(indexType, List.of("idx_v1"), q, b -> b.size(5))).isEmpty();
-            assertThat(sut.searchWithUserAuth(indexType, List.of("idx_v1"), q)).isEmpty();
-            assertThat(sut.searchWithUserAuth(indexType, q, b -> b.size(5))).isEmpty();
-            assertThat(sut.searchWithUserAuth(indexType, q)).isEmpty();
-        }
-
-        @Test
-        void convenienceWithoutIndices_usesIndexReadAlias() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
-            when(searchItemAuthorization.filterByAuthorization(any(), any())).thenReturn(List.of());
-
-            sut.searchWithUserAuth(indexType, Query.of(q -> q.matchAll(m -> m)));
-
-            assertThat(captureSearchRequest().index()).containsExactly(indexType.indexReadAlias());
-        }
-    }
-
-    @Nested
-    class ReadUnchecked {
-
-        @Test
-        void zeroHits_returnsEmpty() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            Optional<SearchItemTyped<TestData>> result =
-                    sut.readUnchecked(indexType, List.of("idx_v1"), "id-1");
-
-            assertThat(result).isEmpty();
-            org.mockito.Mockito.verifyNoInteractions(searchItemAuthorization, userSearchItemAuthorization);
-        }
-
-        @Test
-        void oneHit_returnsItem_andDoesNotCheckAuth() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode src = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            whenSearchReturnsHits(List.of(mockHit("d1", src)));
-
-            Optional<SearchItemTyped<TestData>> result =
-                    sut.readUnchecked(indexType, List.of("idx_v1"), "id-1");
-
-            assertThat(result).isPresent();
-            assertThat(result.orElseThrow().origin().id()).isEqualTo("id-1");
-            org.mockito.Mockito.verifyNoInteractions(searchItemAuthorization, userSearchItemAuthorization);
-        }
-
-        @Test
-        void twoHits_throwsMultipleSearchItemsFoundException() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode s1 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            JsonNode s2 = SearchTestData.sourceJson(objectMapper, "id-1", "BP2", "beta");
-            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
-            List<String> indices = List.of("idx_v1");
-
-            assertThatThrownBy(() ->
-                    sut.readUnchecked(indexType, indices, "id-1"))
-                    .isInstanceOfSatisfying(MultipleSearchItemsFoundException.class,
-                            ex -> assertThat(ex.getMessage())
-                                    .contains("id-1")
-                                    .contains(indexType.getClass().getSimpleName())
-                                    .contains("2"));
-        }
-
-        @Test
-        void convenienceWithoutIndices_usesIndexReadAlias() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            sut.readUnchecked(indexType, "id-1");
-
-            assertThat(captureSearchRequest().index()).containsExactly(indexType.indexReadAlias());
-        }
-
-        @Test
-        void buildsSearchRequest_withSize2() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-
-            sut.readUnchecked(indexType, List.of("idx_v1"), "id-1");
-
-            assertThat(captureSearchRequest().size()).isEqualTo(2);
-        }
-    }
-
-    @Nested
-    class ReadWithAuth {
-
-        @Test
-        void nullAuth_throwsNoAuthorization() throws IOException {
-            SearchItemClient sut = newClient();
-            List<String> indices = List.of("idx_v1");
-
-            assertThatThrownBy(() ->
-                    sut.read(indexType, indices, "id-1", null))
-                    .isInstanceOfSatisfying(IndexTypeAccessDeniedException.class,
-                            ex -> assertThat(ex.getMessage()).contains("no authorization"));
-
-            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
-        }
-
-        @Test
-        void notAuthorized_throwsIndexTypeAccessDenied() {
-            SearchItemClient sut = newClient();
-            Authorization wrongAuth = new Authorization(Set.of("other_role"), Map.of());
-            List<String> indices = List.of("idx_v1");
-
-            assertThatThrownBy(() ->
-                    sut.read(indexType, indices, "id-1", wrongAuth))
-                    .isInstanceOf(IndexTypeAccessDeniedException.class);
-        }
-
-        @Test
-        void unauthorisedItem_postFilteredOut_returnsEmpty() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode src = SearchTestData.sourceJson(objectMapper, "id-1", "BP_OTHER", "alpha");
-            whenSearchReturnsHits(List.of(mockHit("d1", src)));
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth)))
-                    .thenReturn(List.of());
-
-            Optional<SearchItemTyped<TestData>> result =
-                    sut.read(indexType, List.of("idx_v1"), "id-1", globalAuth);
-
-            assertThat(result).isEmpty();
-        }
-
-        @Test
-        void authorizedItem_returnsItem() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode src = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            whenSearchReturnsHits(List.of(mockHit("d1", src)));
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            Optional<SearchItemTyped<TestData>> result =
-                    sut.read(indexType, List.of("idx_v1"), "id-1", globalAuth);
-
-            assertThat(result).isPresent();
-            assertThat(result.orElseThrow().origin().id()).isEqualTo("id-1");
-        }
-
-        @Test
-        void twoHits_throwsMultipleSearchItemsFoundException() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode s1 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            JsonNode s2 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "beta");
-            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
-            when(searchItemAuthorization.filterByAuthorization(any(), any()))
-                    .thenAnswer(inv -> inv.getArgument(0));
-            List<String> indices = List.of("idx_v1");
-
-            assertThatThrownBy(() ->
-                    sut.read(indexType, indices, "id-1", globalAuth))
-                    .isInstanceOf(MultipleSearchItemsFoundException.class);
-        }
-
-        @Test
-        void authScopeUniqueness_idAlsoInForeignBp_postFilterStripsForeignHit_returnsOnlyOwn() throws IOException {
-            // The uniqueness check runs against the post-filtered list, not the raw hits.
-            // When the same origin.id exists in an accessible and a foreign BP and both
-            // surface from OpenSearch (e.g. customizer overrode the pre-filter), the
-            // post-filter resolves it without MultipleSearchItemsFoundException.
-            SearchItemClient sut = newClient();
-            JsonNode ownHit = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "own");
-            JsonNode foreignHit = SearchTestData.sourceJson(objectMapper, "id-1", "BP2", "foreign");
-            whenSearchReturnsHits(List.of(mockHit("d1", ownHit), mockHit("d2", foreignHit)));
-            Authorization bp1Auth = new Authorization(
-                    Set.of(), Map.of("BP1", Set.of("inspection_read")));
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(bp1Auth)))
-                    .thenAnswer(inv -> {
-                        List<SearchItemTyped<TestData>> input = inv.getArgument(0);
-                        return input.stream()
-                                .filter(it -> "BP1".equals(it.origin().bpId()))
-                                .toList();
-                    });
-
-            Optional<SearchItemTyped<TestData>> result =
-                    sut.read(indexType, List.of("idx_v1"), "id-1", bp1Auth);
-
-            assertThat(result).isPresent();
-            assertThat(result.orElseThrow().origin().bpId()).isEqualTo("BP1");
-            assertThat(result.orElseThrow().data().label()).isEqualTo("own");
-        }
-
-        @Test
-        void convenienceWithoutIndices_usesIndexReadAlias() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(searchItemAuthorization.filterByAuthorization(any(), any())).thenReturn(List.of());
-
-            sut.read(indexType, "id-1", globalAuth);
-
-            assertThat(captureSearchRequest().index()).containsExactly(indexType.indexReadAlias());
-        }
-    }
-
-    @Nested
-    class ReadWithUserAuth {
-
-        @Test
-        void providerNull_throwsNoAuthorization() throws IOException {
-            SearchItemClient sut = newClient();
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(null);
-            List<String> indices = List.of("idx_v1");
-
-            assertThatThrownBy(() ->
-                    sut.readWithUserAuth(indexType, indices, "id-1"))
-                    .isInstanceOf(IndexTypeAccessDeniedException.class);
-
-            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
-        }
-
-        @Test
-        void providerReturnsAuth_resolvesItemSuccessfully() throws IOException {
-            SearchItemClient sut = newClient();
-            JsonNode src = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
-            whenSearchReturnsHits(List.of(mockHit("d1", src)));
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
-            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth)))
-                    .thenAnswer(inv -> inv.getArgument(0));
-
-            Optional<SearchItemTyped<TestData>> result =
-                    sut.readWithUserAuth(indexType, List.of("idx_v1"), "id-1");
-
-            assertThat(result).isPresent();
-        }
-
-        @Test
-        void allTwoOverloadsCompile() throws IOException {
-            SearchItemClient sut = newClient();
-            whenSearchReturnsHits(List.of());
-            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
-            when(searchItemAuthorization.filterByAuthorization(any(), any())).thenReturn(List.of());
-
-            assertThat(sut.readWithUserAuth(indexType, List.of("idx_v1"), "id-1")).isEmpty();
-            assertThat(sut.readWithUserAuth(indexType, "id-1")).isEmpty();
-        }
-    }
-
-    @Nested
     class ExceptionWrapping {
 
         @Test
@@ -645,16 +127,15 @@ class SearchItemClientTest {
             IOException ioe = new IOException("transport failed");
             when(openSearchClient.search(any(SearchRequest.class), eq(JsonNode.class)))
                     .thenThrow(ioe);
-            List<String> indices = List.of("idx_v1");
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
             Query query = Query.of(q -> q.matchAll(m -> m));
 
             assertThatThrownBy(() ->
-                    sut.searchUnchecked(indexType, indices, query))
+                    sut.searchMultiVersionUnchecked(types, query))
                     .isInstanceOfSatisfying(SearchItemClientException.class, ex -> {
                         assertThat(ex.getCause()).isSameAs(ioe);
                         assertThat(ex.getMessage())
-                                .contains(indexType.getClass().getSimpleName())
-                                .contains("idx_v1");
+                                .contains(indexTypeV2.getClass().getSimpleName());
                     });
         }
 
@@ -671,11 +152,11 @@ class SearchItemClientTest {
             when(errorCause.reason()).thenReturn("no such index");
             when(openSearchClient.search(any(SearchRequest.class), eq(JsonNode.class)))
                     .thenThrow(ose);
-            List<String> indices = List.of("idx_v1");
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
             Query query = Query.of(q -> q.matchAll(m -> m));
 
             assertThatThrownBy(() ->
-                    sut.searchUnchecked(indexType, indices, query))
+                    sut.searchMultiVersionUnchecked(types, query))
                     .isInstanceOfSatisfying(SearchItemClientException.class, ex -> {
                         assertThat(ex.getCause()).isSameAs(ose);
                         assertThat(ex.getMessage()).contains("404").contains("index_not_found_exception");
@@ -685,6 +166,7 @@ class SearchItemClientTest {
         @Test
         void deserializationError_wrappedInSearchItemClientException() throws IOException {
             SearchItemClient sut = newClient();
+            // Build a doc with valid search_item.major_version=1 but bad data field.
             ObjectNode root = objectMapper.createObjectNode();
             ObjectNode originNode = root.putObject("origin");
             originNode.put("id", "id-1");
@@ -692,12 +174,13 @@ class SearchItemClientTest {
             originNode.putNull("bp_id");
             originNode.putNull("tenant");
             root.put("data", "not-an-object");
+            root.putObject("search_item").put("major_version", 1);
             whenSearchReturnsHits(List.of(mockHit("d1", root)));
-            List<String> indices = List.of("idx_v1");
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
             Query query = Query.of(q -> q.matchAll(m -> m));
 
             assertThatThrownBy(() ->
-                    sut.searchUnchecked(indexType, indices, query))
+                    sut.searchMultiVersionUnchecked(types, query))
                     .isInstanceOfSatisfying(SearchItemClientException.class, ex ->
                             assertThat(ex.getCause())
                                     .isInstanceOfAny(JsonProcessingException.class, IllegalArgumentException.class));
@@ -705,16 +188,319 @@ class SearchItemClientTest {
 
         @Test
         void exceptionWrappingAlsoAppliesToAuthorizedSearches() throws IOException {
-            // search(..., auth) routes through searchUnchecked — wrapping is shared.
             SearchItemClient sut = newClient();
             when(openSearchClient.search(any(SearchRequest.class), eq(JsonNode.class)))
                     .thenThrow(new IOException("boom"));
-            List<String> indices = List.of("idx_v1");
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
             Query query = Query.of(q -> q.matchAll(m -> m));
 
             assertThatThrownBy(() ->
-                    sut.search(indexType, indices, query, globalAuth))
+                    sut.searchMultiVersion(types, query, globalAuth))
                     .isInstanceOf(SearchItemClientException.class);
         }
     }
+
+    // ============================================================================
+    // multi-version typed
+    // ============================================================================
+
+    @Nested
+    class SearchMultiVersionUncheckedTyped {
+
+        @Test
+        void deserialisesV1AndV2Hits_withCorrectIndexType() throws IOException {
+            SearchItemClient sut = newClient();
+            JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+            JsonNode s2 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-2", "BP2", "name", "beta", 2);
+            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
+
+            List<SearchItemTyped<?>> result = sut.searchMultiVersionUnchecked(
+                    List.of(indexType, indexTypeV2),
+                    Query.of(q -> q.matchAll(m -> m)));
+
+            assertThat(result).hasSize(2);
+            assertThat(result.get(0).indexType()).isSameAs(indexType);
+            assertThat(result.get(0).data()).isInstanceOf(TestData.class);
+            assertThat(((TestData) result.get(0).data()).label()).isEqualTo("alpha");
+            assertThat(result.get(1).indexType()).isSameAs(indexTypeV2);
+            assertThat(result.get(1).data()).isInstanceOf(TestDataV2.class);
+            assertThat(((TestDataV2) result.get(1).data()).name()).isEqualTo("beta");
+        }
+
+        @Test
+        void docMissingMajorVersion_throwsSearchItemClientException() throws IOException {
+            SearchItemClient sut = newClient();
+            JsonNode s1 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
+            JsonNode s2 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-2", "BP2", "label", "beta", 1);
+            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersionUnchecked(
+                            List.of(indexType, indexTypeV2),
+                            Query.of(q -> q.matchAll(m -> m))))
+                    .isInstanceOf(SearchItemClientException.class)
+                    .hasMessageContaining("d1")
+                    .hasMessageContaining("major_version");
+        }
+
+        @Test
+        void docUnknownMajorVersion_throwsSearchItemClientException() throws IOException {
+            SearchItemClient sut = newClient();
+            JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+            JsonNode sUnknown = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-99", "BP1", "label", "orphan", 99);
+            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d99", sUnknown)));
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersionUnchecked(
+                            List.of(indexType, indexTypeV2),
+                            Query.of(q -> q.matchAll(m -> m))))
+                    .isInstanceOf(SearchItemClientException.class)
+                    .hasMessageContaining("d99")
+                    .hasMessageContaining("99");
+        }
+
+        @Test
+        void nullSource_isSilentlyDropped() throws IOException {
+            SearchItemClient sut = newClient();
+            JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", null)));
+
+            List<SearchItemTyped<?>> result = sut.searchMultiVersionUnchecked(
+                    List.of(indexType, indexTypeV2),
+                    Query.of(q -> q.matchAll(m -> m)));
+
+            assertThat(result).hasSize(1);
+        }
+
+        @Test
+        void derivedIndices_matchIndexReadAliasOfIndexTypes() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+
+            sut.searchMultiVersionUnchecked(
+                    List.of(indexType, indexTypeV2),
+                    Query.of(q -> q.matchAll(m -> m)));
+
+            // v1 and v2 share the same originType → same indexReadAlias; distinct() yields one entry
+            assertThat(captureSearchRequest().index())
+                    .containsExactly(indexType.indexReadAlias());
+        }
+
+        @Test
+        void allTwoOverloadsCompile_andRun() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
+            Query q = Query.of(qb -> qb.matchAll(m -> m));
+
+            assertThat(sut.searchMultiVersionUnchecked(types, q, b -> b.size(5))).isEmpty();
+            assertThat(sut.searchMultiVersionUnchecked(types, q)).isEmpty();
+        }
+
+        @Test
+        void differentSystem_throwsIllegalArgument() {
+            SearchItemClient sut = newClient();
+            TestIndexTypeV2 otherSystem = new TestIndexTypeV2(List.of("inspection_read"), "other");
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersionUnchecked(
+                            List.of(indexType, otherSystem),
+                            Query.of(q -> q.matchAll(m -> m))))
+                    .isInstanceOf(SearchItemClientException.class)
+                    .hasMessageContaining("system");
+        }
+
+        @Test
+        void differentRoles_succeeds_usesLatestVersionRoles() throws IOException {
+            SearchItemClient sut = newClient();
+            // V2 has different roles — this is now allowed; latest version's roles are used for auth
+            TestIndexTypeV2 differentRolesV2 = new TestIndexTypeV2(List.of("other_role"));
+            whenSearchReturnsHits(List.of());
+
+            assertThat(sut.searchMultiVersionUnchecked(
+                    List.of(indexType, differentRolesV2),
+                    Query.of(q -> q.matchAll(m -> m)))).isEmpty();
+        }
+
+        @Test
+        void duplicateMajorVersion_throwsIllegalArgument() {
+            SearchItemClient sut = newClient();
+            TestIndexType anotherV1 = new TestIndexType(List.of("inspection_read"));
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersionUnchecked(
+                            List.of(indexType, anotherV1),
+                            Query.of(q -> q.matchAll(m -> m))))
+                    .isInstanceOf(SearchItemClientException.class)
+                    .hasMessageContaining("Duplicate major version");
+        }
+    }
+
+    @Nested
+    class SearchMultiVersionWithAuthTyped {
+
+        @Test
+        @SuppressWarnings("DataFlowIssue")
+        void nullAuth_throwsNoAuthorization() throws IOException {
+            SearchItemClient sut = newClient();
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersion(types,
+                            Query.of(q -> q.matchAll(m -> m)), null))
+                    .isInstanceOfSatisfying(IndexTypeAccessDeniedException.class,
+                            ex -> assertThat(ex.getMessage()).contains("no authorization"));
+
+            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
+        }
+
+        @Test
+        void globalUserrole_noBpPreFilterApplied_queryPassedThroughUnchanged() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth), any()))
+                    .thenAnswer(inv -> inv.getArgument(0));
+            Query original = Query.of(q -> q.matchAll(m -> m));
+
+            sut.searchMultiVersion(List.of(indexType, indexTypeV2),
+                    original, globalAuth);
+
+            SearchRequest req = captureSearchRequest();
+            assertThat(req.query()).isSameAs(original);
+        }
+
+        @Test
+        void postFilter_dropsUnauthorisedItems() throws IOException {
+            SearchItemClient sut = newClient();
+            JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+            JsonNode s2 = SearchTestData.sourceJsonWithMajorVersion(
+                    objectMapper, "id-2", "BP2", "label", "beta", 1);
+            whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
+            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth), any()))
+                    .thenAnswer(inv -> {
+                        List<SearchItemTyped<?>> input = inv.getArgument(0);
+                        return input.stream().filter(it -> !"id-2".equals(it.origin().id())).toList();
+                    });
+
+            List<SearchItemTyped<?>> result = sut.searchMultiVersion(
+                    List.of(indexType, indexTypeV2),
+                    Query.of(q -> q.matchAll(m -> m)), globalAuth);
+
+            assertThat(result).extracting(it -> it.origin().id()).containsExactly("id-1");
+        }
+
+        @Test
+        void allTwoOverloadsCompile_andRun() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+            when(searchItemAuthorization.filterByAuthorization(any(), any(), any())).thenReturn(List.of());
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
+            Query q = Query.of(qb -> qb.matchAll(m -> m));
+
+            assertThat(sut.searchMultiVersion(types, q, b -> b.size(5), globalAuth)).isEmpty();
+            assertThat(sut.searchMultiVersion(types, q, globalAuth)).isEmpty();
+        }
+    }
+
+    @Nested
+    class SearchMultiVersionWithUserAuthTyped {
+
+        @Test
+        void providerNull_routesIntoNoAuthorization() throws IOException {
+            SearchItemClient sut = newClient();
+            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(null);
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersionWithUserAuth(
+                            List.of(indexType, indexTypeV2),
+                            Query.of(q -> q.matchAll(m -> m))))
+                    .isInstanceOf(IndexTypeAccessDeniedException.class);
+
+            verify(openSearchClient, never()).search(any(SearchRequest.class), any());
+        }
+
+        @Test
+        void providerReturnsAuth_isThreadedThroughToPostFilter() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
+            when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth), any())).thenReturn(List.of());
+
+            sut.searchMultiVersionWithUserAuth(
+                    List.of(indexType, indexTypeV2),
+                    Query.of(q -> q.matchAll(m -> m)));
+
+            verify(searchItemAuthorization).filterByAuthorization(any(), eq(globalAuth), any());
+        }
+
+        @Test
+        void allTwoOverloadsCompile_andRun() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+            when(userSearchItemAuthorization.getUserAuthorization()).thenReturn(globalAuth);
+            when(searchItemAuthorization.filterByAuthorization(any(), any(), any())).thenReturn(List.of());
+            List<IndexType<?>> types = List.of(indexType, indexTypeV2);
+            Query q = Query.of(qb -> qb.matchAll(m -> m));
+
+            assertThat(sut.searchMultiVersionWithUserAuth(types, q, b -> b.size(5))).isEmpty();
+            assertThat(sut.searchMultiVersionWithUserAuth(types, q)).isEmpty();
+        }
+    }
+
+    private SearchItemClient newClientWithPermissiveIndexTypeAuth() {
+        return new SearchItemClient(
+                openSearchClient,
+                objectMapper,
+                mockIndexTypeAuthorization,    // no-op checkAccess
+                new SearchItemAuthorization(), // real post-filter
+                userSearchItemAuthorization);
+    }
+
+    @Nested
+    class BpPreFilter {
+
+        @Test
+        void bpOnlyAuth_appliesBpPreFilter_wrappingQueryInBool() throws IOException {
+            SearchItemClient sut = newClient();
+            whenSearchReturnsHits(List.of());
+            when(searchItemAuthorization.filterByAuthorization(any(), any(), any())).thenReturn(List.of());
+            Authorization bp1Auth = bpOnlyAuth("BP1");
+
+            sut.searchMultiVersion(
+                    List.of(indexType, indexTypeV2),
+                    Query.of(q -> q.matchAll(m -> m)),
+                    bp1Auth);
+
+            SearchRequest req = captureSearchRequest();
+            assertThat(req.query().isBool()).isTrue();
+            assertThat(req.query().bool().filter()).hasSize(1);
+            Query filter = req.query().bool().filter().getFirst();
+            assertThat(filter.isTerms()).isTrue();
+            assertThat(filter.terms().field()).isEqualTo("origin.bp_id");
+        }
+
+        @Test
+        void bpSetEmpty_failsFast_throwsIllegalStateException() {
+            // mockIndexTypeAuthorization.checkAccess() is a no-op (Mockito mock does not throw)
+            SearchItemClient sut = newClientWithPermissiveIndexTypeAuth();
+            // Auth with no userroles and no bproles — getAllBusinessPartnerIdsWithAnyOf returns empty
+            Authorization emptyAuth = new Authorization(Set.of(), Map.of());
+
+            assertThatThrownBy(() ->
+                    sut.searchMultiVersion(
+                            List.of(indexType, indexTypeV2),
+                            Query.of(q -> q.matchAll(m -> m)),
+                            emptyAuth))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Invariant violated");
+        }
+    }
+
 }

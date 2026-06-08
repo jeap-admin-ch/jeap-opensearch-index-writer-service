@@ -426,6 +426,96 @@ This oauth client is then referenced in the `opensearch/messages.json` configura
 ```
 
 
+## SearchItemClient
+
+`SearchItemClient` (from `jeap-opensearch-client-starter`) is the authorization-aware search client for consuming documents that were indexed by this service. It supports **multi-version search**: you pass all `IndexType` versions of the same business object, and the client dispatches deserialization per document based on the `search_item.major_version` field written at index time.
+
+### Setup
+
+Include the starter in your consuming service:
+
+```xml
+<dependency>
+    <groupId>ch.admin.bit.jeap</groupId>
+    <artifactId>jeap-opensearch-client-starter</artifactId>
+</dependency>
+```
+
+Configure the OpenSearch connection:
+
+```yaml
+jeap:
+  opensearch:
+    client:
+      connection:
+        uri: https://my-domain.eu-central-2.es.amazonaws.com
+```
+
+### Method Families
+
+Every method family comes in three authorization variants:
+
+| Variant       | Method suffix      | Auth behaviour                                                                                                                            |
+|---------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| Unchecked     | `…Unchecked(…)`    | No access check, no result filtering                                                                                                      |
+| Explicit auth | `…(…, auth)`       | Checks access via `IndexTypeAuthorization`; `auth == null` throws `IndexTypeAccessDeniedException`; applies BP pre-filter and post-filter |
+| User auth     | `…WithUserAuth(…)` | Resolves `Authorization` from `UserSearchItemAuthorization` and delegates to the explicit-auth variant                                    |
+
+Each variant has two overloads: one that accepts a `Consumer<SearchRequest.Builder>` customizer for setting size, from, sorting etc., and one without.
+
+### Multi-Version Search
+
+All provided `IndexType` instances must share the same `system` and `originType`. The search targets the shared `IndexReadAlias` (e.g. `jme_decree_document_read`) which covers all versions.
+
+```java
+// V1 and V2 of the same index type — share system and originType
+List<IndexType<?>> versions = List.of(DECREE_DOCUMENT_V1, DECREE_DOCUMENT_V2);
+
+// Unchecked — no authorization
+List<SearchItemTyped<?>> results = searchItemClient.searchMultiVersionUnchecked(
+        versions,
+        Query.of(q -> q.term(t -> t.field("data.status").value("ACTIVE"))));
+
+// With explicit authorization
+List<SearchItemTyped<?>> results = searchItemClient.searchMultiVersion(
+        versions,
+        Query.of(q -> q.matchAll(m -> m)),
+        auth);
+
+// With user authorization (resolved from request context) and a customizer
+List<SearchItemTyped<?>> results = searchItemClient.searchMultiVersionWithUserAuth(
+        versions,
+        Query.of(q -> q.matchAll(m -> m)),
+        builder -> builder.size(50));
+```
+
+Each returned `SearchItemTyped<?>` carries:
+- `origin()` — the `Origin` of the business object (id, bpId, tenant, …)
+- `data()` — the deserialized business data, typed to the concrete `IndexType` data class
+- `indexType()` — the `IndexType` instance used to deserialize this document (V1 or V2)
+
+Documents missing `search_item.major_version` or with an unknown major version throw a `SearchItemClientException`. All other errors (`IOException`, `OpenSearchException`, deserialization failures) are also wrapped in `SearchItemClientException`.
+
+### Authorization Model
+
+When `auth` is non-null the client enforces three layers:
+
+1. **Pre-check** — `IndexTypeAuthorization.checkAccess(latestVersion, auth)` verifies the caller has at least one matching role. Throws `IndexTypeAccessDeniedException` on failure.
+2. **BP pre-filter** — if the caller has no global userrole, an OpenSearch `bool` query with a `terms` filter on `origin.bp_id` is injected automatically, so only documents belonging to the caller's authorized business partners are returned from OpenSearch.
+3. **Post-filter** — `SearchItemAuthorization.filterByAuthorization` drops any remaining items the caller is not entitled to see.
+
+Roles are always taken from the **latest** `IndexType` version (highest major/minor). Older versions may have different roles — this is intentional and supported.
+
+### Validation
+
+`SearchItemClientException` is thrown for the following configuration mistakes (detected before the search is executed):
+
+| Condition | Message |
+|---|---|
+| `indexTypes` is null or empty | `"indexTypes must not be null or empty"` |
+| Two types differ in `system` or `originType` | `"All index types must share the same system and origin type…"` |
+| Two types share the same `majorVersion` | `"Duplicate major version …"` |
+
 ## Metrics
 
 The service publishes the following Micrometer metrics:

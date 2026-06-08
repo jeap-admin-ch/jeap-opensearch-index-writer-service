@@ -13,8 +13,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
-import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.client.opensearch.core.SearchRequest;
@@ -23,34 +23,38 @@ import org.opensearch.client.opensearch.core.search.Hit;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * Type-safe, authorization-aware read access to OpenSearch indices.
+ * Authorization-aware multi-version search access to OpenSearch indices.
  *
- * <p>The {@code read}/{@code search} API is split into three stages so the
- * call-site is explicit about whether and how authorization is enforced:
+ * <p>Each search method family comes in three auth stages:
  * <ul>
- *     <li>{@code …Unchecked(…)} — no auth checks. Building-block for the other stages
- *         but also usable for admin endpoints, reporting, batch jobs, unit tests.</li>
+ *     <li>{@code …Unchecked(…)} — no auth checks.</li>
  *     <li>{@code …(…, auth)} — explicit {@link Authorization}. {@code auth == null}
- *         throws {@link IndexTypeAccessDeniedException#noAuthorization}; otherwise
- *         pre-filter (via {@link Authorization#getAllBusinessPartnerIdsWithAnyOf}) and
- *         post-filter (via {@link SearchItemAuthorization#filterByAuthorization}).</li>
- *     <li>{@code …WithUserAuth(…)} — pulls the {@link Authorization} from
- *         {@link UserSearchItemAuthorization#getUserAuthorization()} and delegates to
- *         the auth-stage; a {@code null} from the provider produces the same
- *         {@code noAuthorization} exception as an explicit {@code null}.</li>
+ *         throws {@link IndexTypeAccessDeniedException}; otherwise applies a BP
+ *         pre-filter and post-filter via {@link SearchItemAuthorization}.</li>
+ *     <li>{@code …WithUserAuth(…)} — pulls {@link Authorization} from
+ *         {@link UserSearchItemAuthorization#getUserAuthorization()} and delegates
+ *         to the auth stage.</li>
  * </ul>
  *
- * <p>{@code IOException} and {@link OpenSearchException} from the underlying client are
- * wrapped in {@link SearchItemClientException} so the public API is checked-exception
- * free. The wrapping lives exclusively inside {@code searchUnchecked(...)} — all other
- * stages route through it.
+ * <p>All provided {@link IndexType} instances must share the same system and origin type.
+ * Authorization checks (pre-check, BP pre-filter, post-filter) all use the roles of the
+ * <em>latest</em> version (highest majorVersion/minorVersion). Deserialization is dispatched
+ * per document by {@code search_item.major_version}.
+ * Documents missing that field or referencing an unknown version throw a
+ * {@link SearchItemClientException}.
+ *
+ * <p>{@code IOException} and {@link OpenSearchException} are wrapped in
+ * {@link SearchItemClientException}.
  */
+@Slf4j
 @RequiredArgsConstructor
 public class SearchItemClient {
 
@@ -61,182 +65,123 @@ public class SearchItemClient {
     private final UserSearchItemAuthorization userSearchItemAuthorization;
 
     // ============================================================================
-    // read without any authorization checks
+    // multi-version search without any authorization checks (typed)
     // ============================================================================
 
-    public <T> Optional<SearchItemTyped<T>> readUnchecked(
-            IndexType<T> indexType, List<String> indices, String id) {
-        List<SearchItemTyped<T>> hits =
-                searchUnchecked(indexType, indices, idQuery(id), b -> b.size(2));
-        return toReadResult(indexType, indices, id, hits);
-    }
-
-    public <T> Optional<SearchItemTyped<T>> readUnchecked(IndexType<T> indexType, String id) {
-        return readUnchecked(indexType, List.of(indexType.indexReadAlias()), id);
-    }
-
-    // ============================================================================
-    // read with check against explicit Authorization
-    // ============================================================================
-
-    public <T> Optional<SearchItemTyped<T>> read(
-            IndexType<T> indexType, List<String> indices, String id, Authorization auth) {
-        List<SearchItemTyped<T>> hits =
-                search(indexType, indices, idQuery(id), b -> b.size(2), auth);
-        return toReadResult(indexType, indices, id, hits);
-    }
-
-    public <T> Optional<SearchItemTyped<T>> read(
-            IndexType<T> indexType, String id, Authorization auth) {
-        return read(indexType, List.of(indexType.indexReadAlias()), id, auth);
-    }
-
-    // ============================================================================
-    // read with check against the user's Authorization
-    // ============================================================================
-
-    public <T> Optional<SearchItemTyped<T>> readWithUserAuth(
-            IndexType<T> indexType, List<String> indices, String id) {
-        return read(indexType, indices, id, userSearchItemAuthorization.getUserAuthorization());
-    }
-
-    public <T> Optional<SearchItemTyped<T>> readWithUserAuth(IndexType<T> indexType, String id) {
-        return readWithUserAuth(indexType, List.of(indexType.indexReadAlias()), id);
-    }
-
-    // ============================================================================
-    // search without any authorization checks
-    // ============================================================================
-
-    public <T> List<SearchItemTyped<T>> searchUnchecked(
-            IndexType<T> indexType, List<String> indices, Query query,
-            Consumer<SearchRequest.Builder> searchRequestCustomizer) {
-        SearchRequest.Builder builder = new SearchRequest.Builder()
-                .index(indices)
-                .query(query);
-        if (searchRequestCustomizer != null) {
-            searchRequestCustomizer.accept(builder);
-        }
-        SearchRequest request = builder.build();
-
-        SearchResponse<JsonNode> response = executeSearch(request, indexType, indices);
-        List<SearchItemTyped<T>> items = new ArrayList<>();
-        for (Hit<JsonNode> hit : response.hits().hits()) {
-            toSearchItem(hit, indexType).ifPresent(items::add);
-        }
-        return items;
-    }
-
-    public <T> List<SearchItemTyped<T>> searchUnchecked(
-            IndexType<T> indexType, List<String> indices, Query query) {
-        return searchUnchecked(indexType, indices, query, null);
-    }
-
-    public <T> List<SearchItemTyped<T>> searchUnchecked(
-            IndexType<T> indexType, Query query,
-            Consumer<SearchRequest.Builder> searchRequestCustomizer) {
-        return searchUnchecked(indexType, List.of(indexType.indexReadAlias()), query,
+    /**
+     * Searches across multiple versions of the same index type, dispatching deserialization
+     * to the matching {@link IndexType} based on {@code search_item.major_version} in each
+     * document. All provided {@link IndexType} instances must share the same system and origin
+     * type. The index is derived from the shared {@link IndexType#indexReadAlias()}.
+     * Documents without {@code search_item.major_version} or with an unknown major version
+     * throw a {@link SearchItemClientException}.
+     */
+    public List<SearchItemTyped<?>> searchMultiVersionUnchecked(List<IndexType<?>> indexTypes, Query query,
+                                                                Consumer<SearchRequest.Builder> searchRequestCustomizer) {
+        IndexType<?> latest = validateAndGetLatest(indexTypes);
+        Map<Integer, IndexType<?>> byMajor = indexTypesByMajor(indexTypes);
+        return doSearchMultiVersionTyped(byMajor, latest, allReadAliases(indexTypes), query,
                 searchRequestCustomizer);
     }
 
-    public <T> List<SearchItemTyped<T>> searchUnchecked(IndexType<T> indexType, Query query) {
-        return searchUnchecked(indexType, List.of(indexType.indexReadAlias()), query, null);
+    /**
+     * Convenience overload of {@link #searchMultiVersionUnchecked(List, Query, Consumer)}
+     * without a request customizer.
+     */
+    public List<SearchItemTyped<?>> searchMultiVersionUnchecked(
+            List<IndexType<?>> indexTypes, Query query) {
+        return searchMultiVersionUnchecked(indexTypes, query, null);
     }
 
     // ============================================================================
-    // search with check against explicit Authorization
+    // multi-version search with check against explicit Authorization (typed)
     // ============================================================================
 
-    public <T> List<SearchItemTyped<T>> search(
-            IndexType<T> indexType, List<String> indices, Query query,
-            Consumer<SearchRequest.Builder> searchRequestCustomizer, Authorization auth) {
-
-        indexTypeAuthorization.checkAccess(indexType, auth);
-
-        Query effectiveQuery = applyBpPreFilterIfNeeded(indexType, query, auth);
-
-        List<SearchItemTyped<T>> items =
-                searchUnchecked(indexType, indices, effectiveQuery, searchRequestCustomizer);
-
-        return searchItemAuthorization.filterByAuthorization(items, auth);
+    /**
+     * Authorization-checked multi-version search against an explicit {@link Authorization}.
+     *
+     * <p>Steps performed:
+     * <ol>
+     *   <li>Validates {@code indexTypes} and resolves the latest version (see class Javadoc).</li>
+     *   <li>Calls {@link IndexTypeAuthorization#checkAccess} — throws
+     *       {@link IndexTypeAccessDeniedException} if {@code auth} is {@code null} or lacks
+     *       the required roles.</li>
+     *   <li>Wraps {@code query} in a BP pre-filter when the caller has only BP-scoped roles
+     *       (no global userrole), so OpenSearch only returns items for the caller's authorised
+     *       business partners.</li>
+     *   <li>Executes the search and post-filters results via
+     *       {@link SearchItemAuthorization#filterByAuthorization}, using the latest version's
+     *       roles for all items.</li>
+     * </ol>
+     *
+     * @param indexTypes              the index-type versions to search across; must be non-empty
+     *                                and share the same system and origin type
+     * @param query                   the OpenSearch query to execute
+     * @param searchRequestCustomizer optional callback to further configure the
+     *                                {@link SearchRequest.Builder} (may be {@code null})
+     * @param auth                    the caller's authorization; {@code null} causes an
+     *                                {@link IndexTypeAccessDeniedException}
+     * @return authorized search results, deserialized and dispatched by major version
+     * @throws IndexTypeAccessDeniedException if the caller is not authorized for the index type
+     * @throws SearchItemClientException      if {@code indexTypes} is invalid, a document is
+     *                                        missing {@code search_item.major_version}, or an
+     *                                        OpenSearch I/O or API error occurs
+     */
+    public List<SearchItemTyped<?>> searchMultiVersion(List<IndexType<?>> indexTypes, Query query,
+                                                       Consumer<SearchRequest.Builder> searchRequestCustomizer, Authorization auth) {
+        IndexType<?> latest = validateAndGetLatest(indexTypes);
+        Map<Integer, IndexType<?>> byMajor = indexTypesByMajor(indexTypes);
+        indexTypeAuthorization.checkAccess(latest, auth);
+        Query effectiveQuery = applyBpPreFilterIfNeeded(latest, query, auth);
+        List<SearchItemTyped<?>> items = doSearchMultiVersionTyped(byMajor, latest,
+                allReadAliases(indexTypes), effectiveQuery, searchRequestCustomizer);
+        return searchItemAuthorization.filterByAuthorization(items, auth, latest.roles());
     }
 
-    public <T> List<SearchItemTyped<T>> search(
-            IndexType<T> indexType, List<String> indices, Query query, Authorization auth) {
-        return search(indexType, indices, query, null, auth);
-    }
-
-    public <T> List<SearchItemTyped<T>> search(
-            IndexType<T> indexType, Query query,
-            Consumer<SearchRequest.Builder> searchRequestCustomizer, Authorization auth) {
-        return search(indexType, List.of(indexType.indexReadAlias()), query,
-                searchRequestCustomizer, auth);
-    }
-
-    public <T> List<SearchItemTyped<T>> search(
-            IndexType<T> indexType, Query query, Authorization auth) {
-        return search(indexType, List.of(indexType.indexReadAlias()), query, null, auth);
+    /**
+     * Convenience overload of {@link #searchMultiVersion(List, Query, Consumer, Authorization)}
+     * without a request customizer.
+     */
+    public List<SearchItemTyped<?>> searchMultiVersion(List<IndexType<?>> indexTypes, Query query, Authorization auth) {
+        return searchMultiVersion(indexTypes, query, null, auth);
     }
 
     // ============================================================================
-    // search with check against the user's Authorization
+    // multi-version search with check against the user's Authorization (typed)
     // ============================================================================
 
-    public <T> List<SearchItemTyped<T>> searchWithUserAuth(
-            IndexType<T> indexType, List<String> indices, Query query,
-            Consumer<SearchRequest.Builder> searchRequestCustomizer) {
-        return search(indexType, indices, query, searchRequestCustomizer,
-                userSearchItemAuthorization.getUserAuthorization());
+    /**
+     * Retrieves the current user's {@link Authorization} from the configured
+     * {@link ch.admin.bit.jeap.opensearch.client.auth.UserAuthorizationProvider} and
+     * delegates to {@link #searchMultiVersion(List, Query, Consumer, Authorization)}.
+     *
+     * @param indexTypes              the index-type versions to search across; must be non-empty
+     *                                and share the same system and origin type
+     * @param query                   the OpenSearch query to execute
+     * @param searchRequestCustomizer optional callback to further configure the
+     *                                {@link SearchRequest.Builder} (may be {@code null})
+     * @return authorized search results for the current user
+     * @throws IndexTypeAccessDeniedException if the current user is not authorized for the index type
+     * @throws SearchItemClientException      if {@code indexTypes} is invalid, a document is
+     *                                        missing {@code search_item.major_version}, or an
+     *                                        OpenSearch I/O or API error occurs
+     */
+    public List<SearchItemTyped<?>> searchMultiVersionWithUserAuth(List<IndexType<?>> indexTypes, Query query,
+                                                                   Consumer<SearchRequest.Builder> searchRequestCustomizer) {
+        return searchMultiVersion(indexTypes, query, searchRequestCustomizer, userSearchItemAuthorization.getUserAuthorization());
     }
 
-    public <T> List<SearchItemTyped<T>> searchWithUserAuth(
-            IndexType<T> indexType, List<String> indices, Query query) {
-        return searchWithUserAuth(indexType, indices, query, null);
-    }
-
-    public <T> List<SearchItemTyped<T>> searchWithUserAuth(
-            IndexType<T> indexType, Query query,
-            Consumer<SearchRequest.Builder> searchRequestCustomizer) {
-        return searchWithUserAuth(indexType, List.of(indexType.indexReadAlias()), query,
-                searchRequestCustomizer);
-    }
-
-    public <T> List<SearchItemTyped<T>> searchWithUserAuth(IndexType<T> indexType, Query query) {
-        return searchWithUserAuth(indexType, List.of(indexType.indexReadAlias()), query, null);
+    /**
+     * Convenience overload of {@link #searchMultiVersionWithUserAuth(List, Query, Consumer)}
+     * without a request customizer.
+     */
+    public List<SearchItemTyped<?>> searchMultiVersionWithUserAuth(List<IndexType<?>> indexTypes, Query query) {
+        return searchMultiVersionWithUserAuth(indexTypes, query, null);
     }
 
     // ============================================================================
     // private helpers
     // ============================================================================
-
-    private static Query idQuery(String id) {
-        return Query.of(q -> q.term(t -> t
-                .field("origin.id")
-                .value(FieldValue.of(id))));
-    }
-
-    /**
-     * Maps a {@code read}-style result list to an {@link Optional}, enforcing uniqueness.
-     *
-     * <p>Note (V2): the uniqueness check is performed against the <em>caller-visible</em>
-     * list — for {@code readUnchecked} that is the raw OpenSearch result (global
-     * uniqueness), for {@code read(..., auth)} and {@code readWithUserAuth} that is the
-     * post-filter result (authorization-scope uniqueness). The asymmetry is intentional:
-     * it preserves information-disclosure boundaries while still allowing admin/reporting
-     * paths to detect global data inconsistencies via {@code readUnchecked} or a
-     * {@code read} call with a global-role authorization. See spec V2 section 7.1.
-     */
-    private <T> Optional<SearchItemTyped<T>> toReadResult(
-            IndexType<T> indexType, List<String> indices, String id,
-            List<SearchItemTyped<T>> hits) {
-        if (hits.isEmpty()) {
-            return Optional.empty();
-        }
-        if (hits.size() == 1) {
-            return Optional.of(hits.getFirst());
-        }
-        throw new MultipleSearchItemsFoundException(indexType, indices, id, hits.size());
-    }
 
     /**
      * If the user has a global userrole on the index-type, the query is returned unchanged.
@@ -286,8 +231,7 @@ public class SearchItemClient {
         }
     }
 
-    private SearchResponse<JsonNode> executeSearch(
-            SearchRequest request, IndexType<?> indexType, List<String> indices) {
+    private SearchResponse<JsonNode> executeSearch(SearchRequest request, IndexType<?> indexType, List<String> indices) {
         try {
             return openSearchClient.search(request, JsonNode.class);
         } catch (IOException e) {
@@ -301,5 +245,102 @@ public class SearchItemClient {
                             + ", type '" + e.response().error().type()
                             + "', reason '" + e.response().error().reason() + "'.", e);
         }
+    }
+
+    /**
+     * Validates that all provided {@link IndexType} instances share the same system and origin
+     * type, then returns the instance with the highest {@code (majorVersion, minorVersion)}.
+     * Roles are taken from the returned latest version for all authorization decisions
+     * (pre-check, BP pre-filter, post-filter) and are not required to be identical across versions.
+     *
+     * @throws SearchItemClientException if {@code indexTypes} is null/empty, or if any instance
+     *                                   differs in system/originType
+     */
+    private static IndexType<?> validateAndGetLatest(List<IndexType<?>> indexTypes) {
+        if (indexTypes == null || indexTypes.isEmpty()) {
+            throw new SearchItemClientException("indexTypes must not be null or empty");
+        }
+        IndexType<?> first = indexTypes.getFirst();
+        String system = first.system();
+        String originType = first.originType();
+        IndexType<?> latest = first;
+        for (IndexType<?> indexType : indexTypes) {
+            if (!indexType.system().equals(system) || !indexType.originType().equals(originType)) {
+                throw new SearchItemClientException(
+                        "All index types must share the same system and origin type, but '"
+                                + indexType.getClass().getSimpleName() + "' has '"
+                                + indexType.system() + "/" + indexType.originType()
+                                + "' while the first has '" + system + "/" + originType + "'.");
+            }
+            if (indexType.majorVersion() > latest.majorVersion()
+                    || (indexType.majorVersion() == latest.majorVersion()
+                    && indexType.minorVersion() > latest.minorVersion())) {
+                latest = indexType;
+            }
+        }
+        return latest;
+    }
+
+    private static List<String> allReadAliases(List<IndexType<?>> indexTypes) {
+        return indexTypes.stream().map(IndexType::indexReadAlias).distinct().toList();
+    }
+
+    /**
+     * Builds a map from {@code majorVersion} to {@link IndexType}, validating that no two
+     * entries share the same major version.
+     *
+     * @throws SearchItemClientException if two index types have the same major version
+     */
+    private static Map<Integer, IndexType<?>> indexTypesByMajor(List<IndexType<?>> indexTypes) {
+        Map<Integer, IndexType<?>> map = new HashMap<>();
+        for (IndexType<?> indexType : indexTypes) {
+            IndexType<?> existing = map.put(indexType.majorVersion(), indexType);
+            if (existing != null) {
+                throw new SearchItemClientException(
+                        "Duplicate major version " + indexType.majorVersion()
+                                + " in provided index types ('"
+                                + existing.getClass().getSimpleName() + "' and '"
+                                + indexType.getClass().getSimpleName() + "').");
+            }
+        }
+        return map;
+    }
+
+    private List<SearchItemTyped<?>> doSearchMultiVersionTyped(Map<Integer, IndexType<?>> byMajor, IndexType<?> latest,
+                                                               List<String> indices, Query query, Consumer<SearchRequest.Builder> searchRequestCustomizer) {
+        SearchRequest.Builder builder = new SearchRequest.Builder().index(indices).query(query);
+        if (searchRequestCustomizer != null) {
+            searchRequestCustomizer.accept(builder);
+        }
+        SearchResponse<JsonNode> response = executeSearch(builder.build(), latest, indices);
+        List<SearchItemTyped<?>> items = new ArrayList<>();
+        for (Hit<JsonNode> hit : response.hits().hits()) {
+            toMultiVersionTypedItem(hit, byMajor).ifPresent(items::add);
+        }
+        return items;
+    }
+
+    private Optional<SearchItemTyped<?>> toMultiVersionTypedItem(Hit<JsonNode> hit, Map<Integer, IndexType<?>> indexTypesByMajor) {
+        JsonNode src = hit.source();
+        if (src == null) {
+            return Optional.empty();
+        }
+        JsonNode searchItemNode = src.path("search_item");
+        if (searchItemNode.isMissingNode() || searchItemNode.path("major_version").isMissingNode()) {
+            throw new SearchItemClientException(
+                    "Document '" + hit.id() + "' is missing the required 'search_item.major_version' field.");
+        }
+        int majorVersion = searchItemNode.path("major_version").asInt();
+        IndexType<?> indexType = indexTypesByMajor.get(majorVersion);
+        if (indexType == null) {
+            throw new SearchItemClientException(
+                    "Document '" + hit.id() + "' has major_version=" + majorVersion
+                            + " but no matching IndexType was provided in the search request.");
+        }
+        return captureAndDeserialize(hit, indexType);
+    }
+
+    private <T> Optional<SearchItemTyped<?>> captureAndDeserialize(Hit<JsonNode> hit, IndexType<T> indexType) {
+        return toSearchItem(hit, indexType).map(item -> (SearchItemTyped<?>) item);
     }
 }
