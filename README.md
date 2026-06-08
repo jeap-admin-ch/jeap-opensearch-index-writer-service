@@ -378,6 +378,54 @@ class MyOpenSearchIndexWriterApplication {
 
 The annotation is processed by `jeap-messaging-contract-annotation-processor` (pulled in transitively). If the annotation is absent, or the resolved `appName` does not match `spring.application.name`, the service will refuse to start with a `NoContractException`.
 
+## SearchItems Provider Endpoint
+
+The domain services providing the SearchItem data must expose a REST endpoint in order to be callable by the index writer service.
+
+To activate this API, the service instance must include the `jeap-opensearch-searchitem-api` dependency:
+
+```xml
+<dependency>
+    <groupId>ch.admin.bit.jeap</groupId>
+    <artifactId>jeap-opensearch-searchitem-api</artifactId>
+</dependency>
+```
+
+The oauth2-security configuration of the resource server must reference an authorization server, which defines an oauth client with the role "system_@searchitem_#read".
+
+Example for the OAuth-Mock-Server:
+```yml
+oauth-mock-data:
+  clients:
+    - client-id: "bazg-system-searchitem"
+      client-secret: "..."
+      context: "SYS"
+      userroles: ["system_@searchitem_#read"]
+```
+
+This oauth client is then referenced in the `opensearch/messages.json` configuration of the index writer service via the `oauthClientId` field of each operation. When configured, the index writer service uses this client to acquire an access token and call the SearchItem provider API.
+```json
+{
+  "messages": [
+    {
+      "messageName": "...",
+      "topicName": "...",
+      "operations": [
+        {
+          "indexType": "...",
+          "indexOperation": "...",
+          "condition": "...",
+          "uri": "...",
+          "oauthClientId": "bazg-system-searchitem",
+          "referenceProvider": "..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+
 ## Metrics
 
 The service publishes the following Micrometer metrics:
