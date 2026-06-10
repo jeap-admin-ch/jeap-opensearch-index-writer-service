@@ -99,7 +99,7 @@ Normally you will not use this project directly, but instead set up your own ind
 |---------------------------------------------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `jeap.opensearch.indexwriter.connection.url`                  | —       | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com`).                                                                                                                   |
 | `jeap.opensearch.indexwriter.connection.signing-region`       | —       | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.). Leave blank for non-AWS deployments. |
-| `jeap.opensearch.indexwriter.search-item-provider.timeout`    | 30s     | Connect timeout for the rest client accessing the provider apis.                                                                                                                                       |
+| `jeap.opensearch.indexwriter.search-item-provider.timeout`    | 30s     | Connect timeout for the rest client accessing the provider apis.                                                                                                                                          |
 
 ### OpenSearch Connection
 

@@ -42,7 +42,9 @@ import static org.springframework.util.StringUtils.hasText;
  * <p>
  * When {@code deployAllIndexTypes=false} (the default) and a {@code gitUrl} is configured,
  * only index types that have new or changed mapping files compared to the trunk branch
- * are deployed. This avoids redundant deploys of already-published artifacts.
+ * are deployed on feature branches. On the trunk branch all index types are always
+ * deployed: comparing against trunk after a merge would find no changes because the
+ * merge has already landed, so newly added types would be silently skipped.
  */
 @Mojo(name = "deploy-index-type-artifacts", defaultPhase = LifecyclePhase.DEPLOY)
 public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
@@ -220,13 +222,19 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
     }
 
     /**
-
-     * a {@code gitUrl} is configured. Returns {@code null} if change detection is disabled
-     * or the gitUrl is blank (meaning all index types should be deployed).
+     * Clones the trunk branch for change detection on feature branches.
+     * Returns {@code null} (deploy all) when: {@code deployAllIndexTypes=true},
+     * {@code gitUrl} is blank, or the build is on the trunk branch itself.
+     * The trunk case is skipped because after a merge trunk already contains the
+     * new type, so a comparison would find no difference and newly added types
+     * would never be deployed.
      */
     @SuppressWarnings("java:S5443")
     private File getMasterDescriptorDirForChangeDetection() throws MojoExecutionException {
-        if (deployAllIndexTypes || !hasText(gitUrl)) {
+        if (deployAllIndexTypes || !hasText(gitUrl) || isBuildOnTrunk()) {
+            if (isBuildOnTrunk() && !deployAllIndexTypes && hasText(gitUrl)) {
+                getLog().info("On trunk branch — deploying all index types (git comparison skipped to ensure newly added types are deployed).");
+            }
             return null;
         }
         try {

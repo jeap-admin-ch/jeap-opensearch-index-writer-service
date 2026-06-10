@@ -18,6 +18,34 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DeployIndexTypeArtifactsMojoTest {
 
+    // ── trunk branch always deploys all ──────────────────────────────────────
+
+    /**
+     * Regression test: a new index type added on a feature branch and then merged to trunk
+     * must be deployed on the trunk build. Before the fix the plugin cloned trunk for
+     * comparison — but since the merge had already landed, trunk already contained the new
+     * type, so filterChanged returned an empty list and the artifact was never deployed.
+     * The fix skips git comparison on trunk (returning null for masterDescriptorDir), so
+     * filterChanged returns all types regardless of what exists on trunk.
+     */
+    @Test
+    void filterChangedReturnsAllOnTrunkEvenWhenMasterAlreadyContainsNewType(
+            @TempDir File masterDir, @TempDir File mappingDir) throws IOException {
+        DeployIndexTypeArtifactsMojo mojo = new DeployIndexTypeArtifactsMojo();
+        File mapping = writeFile(mappingDir, "NewType_mapping_v1_0.json", "{}");
+        IndexTypeInfo info = info("NewType", "sys", 1, "1.0", List.of(mapping));
+
+        // Simulate trunk already containing the new type (post-merge state)
+        File masterTypeDir = new File(masterDir, "sys/newtype");
+        Files.createDirectories(masterTypeDir.toPath());
+        writeFile(masterTypeDir, "NewType_mapping_v1_0.json", "{}");
+
+        // On trunk, getMasterDescriptorDirForChangeDetection() returns null → all types are deployed
+        List<IndexTypeInfo> result = mojo.filterChanged(List.of(info), null);
+
+        assertThat(result).containsExactly(info);
+    }
+
     // ── filterChanged ────────────────────────────────────────────────────────
 
     @Test
