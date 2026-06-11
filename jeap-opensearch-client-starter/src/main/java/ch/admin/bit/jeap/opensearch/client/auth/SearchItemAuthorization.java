@@ -1,6 +1,6 @@
 package ch.admin.bit.jeap.opensearch.client.auth;
 
-import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
+import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.indextype.Origin;
 
 import java.util.List;
@@ -9,12 +9,12 @@ import java.util.Set;
 
 public class SearchItemAuthorization {
 
-    public boolean isAuthorized(SearchItemTyped<?> searchItem, Authorization auth) {
+    public boolean isAuthorized(SearchItemView searchItem, Authorization auth) {
         Objects.requireNonNull(searchItem, "searchItem must not be null");
         return isAuthorizedByOriginAndRoles(searchItem.origin(), searchItem.indexType().roles(), auth);
     }
 
-    public <S extends SearchItemTyped<?>> List<S> filterByAuthorization(
+    public <S extends SearchItemView> List<S> filterByAuthorization(
             List<S> searchItems, Authorization auth) {
         Objects.requireNonNull(searchItems, "searchItems must not be null");
         return searchItems.stream()
@@ -28,7 +28,7 @@ public class SearchItemAuthorization {
      * Use this when all versions in a multi-version search share authorization via the
      * latest version's roles.
      */
-    public <S extends SearchItemTyped<?>> List<S> filterByAuthorization(
+    public <S extends SearchItemView> List<S> filterByAuthorization(
             List<S> searchItems, Authorization auth, List<String> requiredRoles) {
         Objects.requireNonNull(searchItems, "searchItems must not be null");
         return searchItems.stream()

@@ -6,6 +6,7 @@ import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
+import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestData;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestDataV2;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestIndexType;
@@ -216,7 +217,7 @@ class SearchItemClientTest {
                     objectMapper, "id-2", "BP2", "name", "beta", 2);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
 
-            List<SearchItemTyped<?>> result = sut.searchMultiVersionUnchecked(
+            List<SearchItemView> result = sut.searchMultiVersionUnchecked(
                     List.of(indexType, indexTypeV2),
                     Query.of(q -> q.matchAll(m -> m)));
 
@@ -271,7 +272,7 @@ class SearchItemClientTest {
                     objectMapper, "id-1", "BP1", "label", "alpha", 1);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", null)));
 
-            List<SearchItemTyped<?>> result = sut.searchMultiVersionUnchecked(
+            List<SearchItemView> result = sut.searchMultiVersionUnchecked(
                     List.of(indexType, indexTypeV2),
                     Query.of(q -> q.matchAll(m -> m)));
 
@@ -385,11 +386,11 @@ class SearchItemClientTest {
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
             when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth), any()))
                     .thenAnswer(inv -> {
-                        List<SearchItemTyped<?>> input = inv.getArgument(0);
+                        List<SearchItemView> input = inv.getArgument(0);
                         return input.stream().filter(it -> !"id-2".equals(it.origin().id())).toList();
                     });
 
-            List<SearchItemTyped<?>> result = sut.searchMultiVersion(
+            List<SearchItemView> result = sut.searchMultiVersion(
                     List.of(indexType, indexTypeV2),
                     Query.of(q -> q.matchAll(m -> m)), globalAuth);
 

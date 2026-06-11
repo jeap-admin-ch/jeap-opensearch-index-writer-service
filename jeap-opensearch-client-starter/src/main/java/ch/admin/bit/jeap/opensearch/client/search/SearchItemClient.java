@@ -6,6 +6,7 @@ import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
+import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.client.filter.OriginFilter;
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indextype.Origin;
@@ -76,7 +77,7 @@ public class SearchItemClient {
      * Documents without {@code search_item.major_version} or with an unknown major version
      * throw a {@link SearchItemClientException}.
      */
-    public List<SearchItemTyped<?>> searchMultiVersionUnchecked(List<IndexType<?>> indexTypes, Query query,
+    public List<SearchItemView> searchMultiVersionUnchecked(List<IndexType<?>> indexTypes, Query query,
                                                                 Consumer<SearchRequest.Builder> searchRequestCustomizer) {
         IndexType<?> latest = validateAndGetLatest(indexTypes);
         Map<Integer, IndexType<?>> byMajor = indexTypesByMajor(indexTypes);
@@ -88,7 +89,7 @@ public class SearchItemClient {
      * Convenience overload of {@link #searchMultiVersionUnchecked(List, Query, Consumer)}
      * without a request customizer.
      */
-    public List<SearchItemTyped<?>> searchMultiVersionUnchecked(
+    public List<SearchItemView> searchMultiVersionUnchecked(
             List<IndexType<?>> indexTypes, Query query) {
         return searchMultiVersionUnchecked(indexTypes, query, null);
     }
@@ -127,13 +128,13 @@ public class SearchItemClient {
      *                                        missing {@code search_item.major_version}, or an
      *                                        OpenSearch I/O or API error occurs
      */
-    public List<SearchItemTyped<?>> searchMultiVersion(List<IndexType<?>> indexTypes, Query query,
+    public List<SearchItemView> searchMultiVersion(List<IndexType<?>> indexTypes, Query query,
                                                        Consumer<SearchRequest.Builder> searchRequestCustomizer, Authorization auth) {
         IndexType<?> latest = validateAndGetLatest(indexTypes);
         Map<Integer, IndexType<?>> byMajor = indexTypesByMajor(indexTypes);
         indexTypeAuthorization.checkAccess(latest, auth);
         Query effectiveQuery = applyBpPreFilterIfNeeded(latest, query, auth);
-        List<SearchItemTyped<?>> items = doSearchMultiVersionTyped(byMajor, latest,
+        List<SearchItemView> items = doSearchMultiVersionTyped(byMajor, latest,
                 allReadAliases(indexTypes), effectiveQuery, searchRequestCustomizer);
         return searchItemAuthorization.filterByAuthorization(items, auth, latest.roles());
     }
@@ -142,7 +143,7 @@ public class SearchItemClient {
      * Convenience overload of {@link #searchMultiVersion(List, Query, Consumer, Authorization)}
      * without a request customizer.
      */
-    public List<SearchItemTyped<?>> searchMultiVersion(List<IndexType<?>> indexTypes, Query query, Authorization auth) {
+    public List<SearchItemView> searchMultiVersion(List<IndexType<?>> indexTypes, Query query, Authorization auth) {
         return searchMultiVersion(indexTypes, query, null, auth);
     }
 
@@ -166,7 +167,7 @@ public class SearchItemClient {
      *                                        missing {@code search_item.major_version}, or an
      *                                        OpenSearch I/O or API error occurs
      */
-    public List<SearchItemTyped<?>> searchMultiVersionWithUserAuth(List<IndexType<?>> indexTypes, Query query,
+    public List<SearchItemView> searchMultiVersionWithUserAuth(List<IndexType<?>> indexTypes, Query query,
                                                                    Consumer<SearchRequest.Builder> searchRequestCustomizer) {
         return searchMultiVersion(indexTypes, query, searchRequestCustomizer, userSearchItemAuthorization.getUserAuthorization());
     }
@@ -175,7 +176,7 @@ public class SearchItemClient {
      * Convenience overload of {@link #searchMultiVersionWithUserAuth(List, Query, Consumer)}
      * without a request customizer.
      */
-    public List<SearchItemTyped<?>> searchMultiVersionWithUserAuth(List<IndexType<?>> indexTypes, Query query) {
+    public List<SearchItemView> searchMultiVersionWithUserAuth(List<IndexType<?>> indexTypes, Query query) {
         return searchMultiVersionWithUserAuth(indexTypes, query, null);
     }
 
@@ -306,21 +307,21 @@ public class SearchItemClient {
         return map;
     }
 
-    private List<SearchItemTyped<?>> doSearchMultiVersionTyped(Map<Integer, IndexType<?>> byMajor, IndexType<?> latest,
-                                                               List<String> indices, Query query, Consumer<SearchRequest.Builder> searchRequestCustomizer) {
+    private List<SearchItemView> doSearchMultiVersionTyped(Map<Integer, IndexType<?>> byMajor, IndexType<?> latest,
+                                                           List<String> indices, Query query, Consumer<SearchRequest.Builder> searchRequestCustomizer) {
         SearchRequest.Builder builder = new SearchRequest.Builder().index(indices).query(query);
         if (searchRequestCustomizer != null) {
             searchRequestCustomizer.accept(builder);
         }
         SearchResponse<JsonNode> response = executeSearch(builder.build(), latest, indices);
-        List<SearchItemTyped<?>> items = new ArrayList<>();
+        List<SearchItemView> items = new ArrayList<>();
         for (Hit<JsonNode> hit : response.hits().hits()) {
             toMultiVersionTypedItem(hit, byMajor).ifPresent(items::add);
         }
         return items;
     }
 
-    private Optional<SearchItemTyped<?>> toMultiVersionTypedItem(Hit<JsonNode> hit, Map<Integer, IndexType<?>> indexTypesByMajor) {
+    private Optional<SearchItemView> toMultiVersionTypedItem(Hit<JsonNode> hit, Map<Integer, IndexType<?>> indexTypesByMajor) {
         JsonNode src = hit.source();
         if (src == null) {
             return Optional.empty();
@@ -340,7 +341,7 @@ public class SearchItemClient {
         return captureAndDeserialize(hit, indexType);
     }
 
-    private <T> Optional<SearchItemTyped<?>> captureAndDeserialize(Hit<JsonNode> hit, IndexType<T> indexType) {
-        return toSearchItem(hit, indexType).map(item -> (SearchItemTyped<?>) item);
+    private <T> Optional<SearchItemView> captureAndDeserialize(Hit<JsonNode> hit, IndexType<T> indexType) {
+        return toSearchItem(hit, indexType).map(item -> item);
     }
 }

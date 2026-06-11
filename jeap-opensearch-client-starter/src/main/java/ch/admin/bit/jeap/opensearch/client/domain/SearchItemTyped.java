@@ -16,7 +16,7 @@ import java.util.Objects;
  * @param indexType the index type describing the OpenSearch index for the payload type
  * @param <T> the type of the search item payload
  */
-public record SearchItemTyped<T>(Origin origin, T data, @JsonIgnore IndexType<T> indexType) {
+public record SearchItemTyped<T>(Origin origin, T data, @JsonIgnore IndexType<T> indexType) implements SearchItemView {
     public SearchItemTyped {
         Objects.requireNonNull(origin, "origin must not be null");
         Objects.requireNonNull(data, "data must not be null");

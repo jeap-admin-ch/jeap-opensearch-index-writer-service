@@ -2,7 +2,7 @@ package ch.admin.bit.jeap.opensearch.client.search;
 
 import ch.admin.bit.jeap.opensearch.client.auth.Authorization;
 import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAccessDeniedException;
-import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
+import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.client.search.SearchItemClientIT.TestConfig;
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indextype.Origin;
@@ -125,13 +125,13 @@ class SearchItemClientIT {
         ensureIndex();
         Authorization globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+        List<SearchItemView> result = searchItemClient.searchMultiVersion(
                 List.of(INDEX_TYPE),
                 Query.of(q -> q.term(t -> t.field("origin.id").value(FieldValue.of("doc-1")))),
                 globalAuth);
 
         assertThat(result).hasSize(1);
-        SearchItemTyped<?> item = result.getFirst();
+        SearchItemView item = result.getFirst();
         Origin origin = item.origin();
         assertThat(origin.id()).isEqualTo("doc-1");
         assertThat(origin.bpId()).isEqualTo("BP1");
@@ -157,7 +157,7 @@ class SearchItemClientIT {
         ensureIndex();
         Authorization globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+        List<SearchItemView> result = searchItemClient.searchMultiVersion(
                 List.of(INDEX_TYPE),
                 Query.of(q -> q.term(t -> t.field("origin.id").value(FieldValue.of("does-not-exist")))),
                 globalAuth);
@@ -170,7 +170,7 @@ class SearchItemClientIT {
         ensureIndex();
         Authorization globalAuth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+        List<SearchItemView> result = searchItemClient.searchMultiVersion(
                 List.of(INDEX_TYPE),
                 Query.of(q -> q.matchAll(m -> m)),
                 globalAuth);
@@ -187,7 +187,7 @@ class SearchItemClientIT {
                 Set.of(),
                 Map.of("BP1", Set.of("inspection_read_bp")));
 
-        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+        List<SearchItemView> result = searchItemClient.searchMultiVersion(
                 List.of(INDEX_TYPE),
                 Query.of(q -> q.matchAll(m -> m)),
                 bp1Auth);
@@ -201,7 +201,7 @@ class SearchItemClientIT {
     void searchMultiVersionUnchecked_returnsAllDocuments_withoutAuthChecks() throws IOException {
         ensureIndex();
 
-        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersionUnchecked(
+        List<SearchItemView> result = searchItemClient.searchMultiVersionUnchecked(
                 List.of(INDEX_TYPE),
                 Query.of(q -> q.matchAll(m -> m)));
 
@@ -271,7 +271,7 @@ class SearchItemClientIT {
         ensureMultiVersionIndex();
         Authorization auth = new Authorization(Set.of("inspection_read"), Map.of());
 
-        List<SearchItemTyped<?>> result = searchItemClient.searchMultiVersion(
+        List<SearchItemView> result = searchItemClient.searchMultiVersion(
                 List.of(mvIndexTypeV1(), mvIndexTypeV2()),
                 Query.of(q -> q.terms(t -> t.field("origin.id")
                         .terms(tf -> tf.value(List.of(
@@ -280,9 +280,9 @@ class SearchItemClientIT {
                 auth);
 
         assertThat(result).hasSize(2);
-        SearchItemTyped<?> v1Item = result.stream()
+        SearchItemView v1Item = result.stream()
                 .filter(it -> "mv-doc-v1".equals(it.origin().id())).findFirst().orElseThrow();
-        SearchItemTyped<?> v2Item = result.stream()
+        SearchItemView v2Item = result.stream()
                 .filter(it -> "mv-doc-v2".equals(it.origin().id())).findFirst().orElseThrow();
         assertThat(v1Item.data()).isInstanceOf(TestData.class);
         assertThat(((TestData) v1Item.data()).label()).isEqualTo("v1-label");

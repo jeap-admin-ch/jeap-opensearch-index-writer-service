@@ -472,27 +472,27 @@ All provided `IndexType` instances must share the same `system` and `originType`
 List<IndexType<?>> versions = List.of(DECREE_DOCUMENT_V1, DECREE_DOCUMENT_V2);
 
 // Unchecked — no authorization
-List<SearchItemTyped<?>> results = searchItemClient.searchMultiVersionUnchecked(
+List<SearchItemView> results = searchItemClient.searchMultiVersionUnchecked(
         versions,
         Query.of(q -> q.term(t -> t.field("data.status").value("ACTIVE"))));
 
 // With explicit authorization
-List<SearchItemTyped<?>> results = searchItemClient.searchMultiVersion(
+List<SearchItemView> results = searchItemClient.searchMultiVersion(
         versions,
         Query.of(q -> q.matchAll(m -> m)),
         auth);
 
 // With user authorization (resolved from request context) and a customizer
-List<SearchItemTyped<?>> results = searchItemClient.searchMultiVersionWithUserAuth(
+List<SearchItemView> results = searchItemClient.searchMultiVersionWithUserAuth(
         versions,
         Query.of(q -> q.matchAll(m -> m)),
         builder -> builder.size(50));
 ```
 
-Each returned `SearchItemTyped<?>` carries:
+Each returned `SearchItemView` carries:
 - `origin()` — the `Origin` of the business object (id, bpId, tenant, …)
-- `data()` — the deserialized business data, typed to the concrete `IndexType` data class
-- `indexType()` — the `IndexType` instance used to deserialize this document (V1 or V2)
+- `data()` — the deserialized business data as `Object`; cast to the concrete data class after inspecting `indexType()`
+- `indexType()` — the `IndexTypeDescriptor` used to deserialize this document (V1 or V2); cast to the concrete `IndexType<T>` if the typed data class is needed
 
 Documents missing `search_item.major_version` or with an unknown major version throw a `SearchItemClientException`. All other errors (`IOException`, `OpenSearchException`, deserialization failures) are also wrapped in `SearchItemClientException`.
 
