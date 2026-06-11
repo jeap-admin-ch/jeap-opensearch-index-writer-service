@@ -57,8 +57,14 @@ public class MessageIndexingService {
         log.debug("Executing {} for index type '{}' triggered by message '{}'",
                 operation.indexOperation(), operation.indexType(), message.getType().getName());
         ReferenceProvider<Message> referenceProvider = operation.referenceProvider();
-        OriginReference originReference = referenceProvider.extractReference(message);
+        List<OriginReference> originReferences = referenceProvider.extractReference(message);
 
+        for (OriginReference originReference : originReferences) {
+            indexForReference(originReference, operation);
+        }
+    }
+
+    private void indexForReference(OriginReference originReference, MessageOperationConfig operation) {
         SearchItemResult searchItemResult = searchItemProvider.findSearchItem(operation.uri(), operation.indexType(), originReference, operation.oauthClientId()).orElseThrow(
                 () -> IndexingException.searchItemNotFound(operation, originReference)
         );

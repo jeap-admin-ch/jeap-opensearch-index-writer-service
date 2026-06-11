@@ -6,7 +6,7 @@ Service template to provide event-driven indexing of search items into OpenSearc
 
 - **Declarative Message Configuration:** Messages with operations map an event type and topic to an index type and index operation (`UPSERT` or `DELETE`)
 - **Multiple Operations:** Any number of operations can be configured per service instance
-- **Reference Provider:** Each operation references a provider that extracts the business object reference (OriginType, Id, optional Version) from the incoming event
+- **Reference Provider:** Each operation references a provider that extracts one or more business object references (OriginType, Id, optional Version) from the incoming event; all returned references are processed independently
 - **SearchItem Provider:** Each operation declares the host of the SearchItem Provider API from which the search item is fetched
 - **Conditional Execution:** operations can reference a condition; the operation is only executed if the event satisfies it
 - **Feature Flags:** operations can be guarded by a feature flag; the operation is skipped when the flag is inactive
@@ -161,30 +161,30 @@ The service principal (IAM role or OpenSearch internal user) requires the follow
 
 **Cluster permissions:**
 
-| Permission                         | Purpose                                                         |
-|------------------------------------|-----------------------------------------------------------------|
-| `indices:admin/index_template/get` | Read index templates on startup to check if they are up to date |
-| `indices:admin/index_template/put` | Create or update index templates on startup                     |
+| Permission                         | Purpose                                                                          |
+|------------------------------------|----------------------------------------------------------------------------------|
+| `indices:admin/index_template/get` | Read index templates on startup to check if they are up to date                  |
+| `indices:admin/index_template/put` | Create or update index templates on startup                                      |
 | `indices:admin/aliases/get`        | Required at cluster level for alias resolution (also needed as index permission) |
-| `indices:data/write/bulk`          | Write documents via the bulk API                                |
+| `indices:data/write/bulk`          | Write documents via the bulk API                                                 |
 
 **Index permissions** (pattern `*`):
 
-| Permission                     | Purpose                                                            |
-|--------------------------------|--------------------------------------------------------------------|
-| `indices:admin/create`         | Create new physical indices                                        |
-| `indices:admin/aliases`        | Manage index aliases                                               |
-| `indices:admin/aliases/exists` | Check whether an alias exists                                      |
-| `indices:admin/aliases/get`    | Resolve which physical indices are behind a write alias            |
-| `indices:admin/mappings/get`   | Read the current mapping of a physical index                       |
-| `indices:admin/mapping/put`    | Update the mapping of a physical index on startup                  |
+| Permission                     | Purpose                                                                                  |
+|--------------------------------|------------------------------------------------------------------------------------------|
+| `indices:admin/create`         | Create new physical indices                                                              |
+| `indices:admin/aliases`        | Manage index aliases                                                                     |
+| `indices:admin/aliases/exists` | Check whether an alias exists                                                            |
+| `indices:admin/aliases/get`    | Resolve which physical indices are behind a write alias                                  |
+| `indices:admin/mappings/get`   | Read the current mapping of a physical index                                             |
+| `indices:admin/mapping/put`    | Update the mapping of a physical index on startup                                        |
 | `indices:admin/settings/update`| Set `plugins.index_state_management.rollover_alias` on physical indices (handled by IaC) |
-| `indices:data/write/bulk*`     | Write documents via the bulk API (wildcard form)                   |
-| `indices:data/write/bulk`      | Write documents via the bulk API                                   |
-| `indices:data/write/index`     | Index (upsert) individual documents                                |
-| `indices:data/write/delete`    | Delete individual documents                                        |
-| `indices:data/read/get`        | Read individual documents                                          |
-| `indices:data/read/search`     | Execute search queries                                             |
+| `indices:data/write/bulk*`     | Write documents via the bulk API (wildcard form)                                         |
+| `indices:data/write/bulk`      | Write documents via the bulk API                                                         |
+| `indices:data/write/index`     | Index (upsert) individual documents                                                      |
+| `indices:data/write/delete`    | Delete individual documents                                                              |
+| `indices:data/read/get`        | Read individual documents                                                                |
+| `indices:data/read/search`     | Execute search queries                                                                   |
 
 As a JSON snippet for an OpenSearch security role:
 
@@ -268,15 +268,15 @@ Each entry in the `messages` array maps a Kafka message type and topic to one or
 
 **Operation fields:**
 
-| Field               | Required | Description                                                                                                                                                                      |
-|---------------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `indexType`         | ✅        | Name of the target IndexType (must match a registered `IndexTypeDescriptor`).                                                                                                    |
-| `indexOperation`    | ✅        | `UPSERT` or `DELETE` (case-insensitive).                                                                                                                                         |
-| `uri`               | ✅        | URI of the SearchItem Provider endpoint. Spring property placeholders (`${...}`) are resolved at startup.                                                                        |
-| `oauthClientId`     | ❌        | The OAuth Client ID used to call the SearchItem Provider. Register this OAuth2 client in spring.security.oauth2.client.registration. If not configured, no OAuth Client is used. |
-| `referenceProvider` | ✅        | Fully qualified class name of the Spring bean implementing `ReferenceProvider`, e.g. `com.example.indexwriter.MyDocumentReferenceProvider`.                                      |
-| `condition`         | ❌        | Fully qualified class name of the Spring bean implementing `IndexingCondition`. The operation is skipped when the condition evaluates to `false`.                                |
-| `featureFlag`       | ❌        | Name of a jEAP feature flag. The operation is skipped when the flag is inactive.                                                                                                 |
+| Field               | Required | Description                                                                                                                                                                                                                                                          |
+|---------------------|----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `indexType`         | ✅        | Name of the target IndexType (must match a registered `IndexTypeDescriptor`).                                                                                                                                                                                        |
+| `indexOperation`    | ✅        | `UPSERT` or `DELETE` (case-insensitive).                                                                                                                                                                                                                             |
+| `uri`               | ✅        | URI of the SearchItem Provider endpoint. Spring property placeholders (`${...}`) are resolved at startup.                                                                                                                                                            |
+| `oauthClientId`     | ❌        | The OAuth Client ID used to call the SearchItem Provider. Register this OAuth2 client in spring.security.oauth2.client.registration. If not configured, no OAuth Client is used.                                                                                     |
+| `referenceProvider` | ✅        | Fully qualified class name of the Spring bean implementing `ReferenceProvider<M>`. The `extractReference` method returns a `List<OriginReference>`; all returned references are processed independently. E.g. `com.example.indexwriter.MyDocumentReferenceProvider`. |
+| `condition`         | ❌        | Fully qualified class name of the Spring bean implementing `IndexingCondition`. The operation is skipped when the condition evaluates to `false`.                                                                                                                    |
+| `featureFlag`       | ❌        | Name of a jEAP feature flag. The operation is skipped when the flag is inactive.                                                                                                                                                                                     |
 
 ## Write Target
 
@@ -287,7 +287,7 @@ All document operations target the **`IndexWriteAlias`** of the configured `Inde
 | `UPSERT`  | `PUT /{indexWriteAlias}/{documentId}` — creates or fully replaces the document  |
 | `DELETE`  | `DELETE /{indexWriteAlias}/{documentId}` — removes the document by its ID       |
 
-The document ID is derived from the `OriginReference` extracted by the configured `ReferenceProvider` for the operation.
+The document ID is derived from each `OriginReference` returned by the configured `ReferenceProvider`. The provider returns a list — if multiple references are returned, the operation is executed independently for each one.
 
 ### Indexed Document Structure
 
@@ -372,9 +372,9 @@ class MyOpenSearchIndexWriterApplication {
 }
 ```
 
-| Attribute         | Description                                                                                                                                                                                  |
-|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `appName`         | Logical application name used for the consumer contracts. Defaults to `spring.application.name` from `application.y[a]ml` when not set.                                                      |
+| Attribute         | Description                                                                                                                              |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| `appName`         | Logical application name used for the consumer contracts. Defaults to `spring.application.name` from `application.y[a]ml` when not set.  |
 
 The annotation is processed by `jeap-messaging-contract-annotation-processor` (pulled in transitively). If the annotation is absent, or the resolved `appName` does not match `spring.application.name`, the service will refuse to start with a `NoContractException`.
 
@@ -510,11 +510,11 @@ Roles are always taken from the **latest** `IndexType` version (highest major/mi
 
 `SearchItemClientException` is thrown for the following configuration mistakes (detected before the search is executed):
 
-| Condition | Message |
-|---|---|
-| `indexTypes` is null or empty | `"indexTypes must not be null or empty"` |
+| Condition                                    | Message                                                         |
+|----------------------------------------------|-----------------------------------------------------------------|
+| `indexTypes` is null or empty                | `"indexTypes must not be null or empty"`                        |
 | Two types differ in `system` or `originType` | `"All index types must share the same system and origin type…"` |
-| Two types share the same `majorVersion` | `"Duplicate major version …"` |
+| Two types share the same `majorVersion`      | `"Duplicate major version …"`                                   |
 
 ## Metrics
 

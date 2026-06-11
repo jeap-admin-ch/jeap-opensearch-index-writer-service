@@ -29,6 +29,7 @@ import org.togglz.core.manager.FeatureManager;
 import org.togglz.core.util.NamedFeature;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -109,6 +110,23 @@ class MessageIndexingServiceTest {
 
         verify(searchItemProvider).findSearchItem(BASE_URI, INDEX_TYPE, ORIGIN_REF, null);
         verify(indexWriter).deleteSearchItem(INDEX_WRITE_ALIAS, "id-1");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void upsertIsPerformedForEachReferenceWhenProviderReturnsMultiple() {
+        stubMessageType("PreziusRegistrationCreated");
+        OriginReference ref1 = new OriginReference(INDEX_TYPE, "id-1", null);
+        OriginReference ref2 = new OriginReference(INDEX_TYPE, "id-2", null);
+        when(referenceProvider.extractReference(message)).thenReturn(List.of(ref1, ref2));
+        stubSearchItemFound();
+        stubIndexType();
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        verify(searchItemProvider).findSearchItem(BASE_URI, INDEX_TYPE, ref1, null);
+        verify(searchItemProvider).findSearchItem(BASE_URI, INDEX_TYPE, ref2, null);
+        verify(indexWriter, times(2)).upsertSearchItem(eq(INDEX_WRITE_ALIAS), any(), any());
     }
 
     @Test
@@ -307,7 +325,7 @@ class MessageIndexingServiceTest {
 
     @SuppressWarnings("unchecked")
     private void stubReferenceProvider() {
-        when(referenceProvider.extractReference(message)).thenReturn(ORIGIN_REF);
+        when(referenceProvider.extractReference(message)).thenReturn(List.of(ORIGIN_REF));
     }
 
     private void stubSearchItemFound() {

@@ -35,6 +35,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Map;import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 @Testcontainers
 class OpenSearchIndexWriterIT {
@@ -244,6 +245,31 @@ class OpenSearchIndexWriterIT {
 
         refreshIndex();
         assertThat(documentExists(docId)).isTrue();
+    }
+
+    @Test
+    void upsertSearchItem_isIdempotent_calledTwiceWithSameIdResultsInSingleDocument() throws IOException {
+        String docId = "test-upsert-idempotent-doc";
+
+        indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, docId, buildSearchItem());
+        indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, docId, buildSearchItem());
+
+        refreshIndex();
+        long count = client.count(c -> c.index(PHYSICAL_INDEX)
+                .query(q -> q.ids(i -> i.values(docId)))).count();
+        assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    void deleteSearchItem_isIdempotent_calledTwiceOnSameIdDoesNotThrow() throws IOException {
+        String docId = "test-delete-idempotent-doc";
+        indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, docId, buildSearchItem());
+        refreshIndex();
+
+        indexWriter.deleteSearchItem(INDEX_WRITE_ALIAS, docId);
+
+        // Second delete on already-absent document must not throw
+        assertThatNoException().isThrownBy(() -> indexWriter.deleteSearchItem(INDEX_WRITE_ALIAS, docId));
     }
 
     @Test

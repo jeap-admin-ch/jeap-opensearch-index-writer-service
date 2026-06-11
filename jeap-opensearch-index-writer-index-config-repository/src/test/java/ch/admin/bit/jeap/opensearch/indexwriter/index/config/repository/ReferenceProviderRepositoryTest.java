@@ -15,15 +15,15 @@ class ReferenceProviderRepositoryTest {
 
     static class FooReferenceProvider implements ReferenceProvider<Message> {
         @Override
-        public OriginReference extractReference(Message message) {
-            return null;
+        public List<OriginReference> extractReference(Message message) {
+            return List.of();
         }
     }
 
     static class BarReferenceProvider implements ReferenceProvider<Message> {
         @Override
-        public OriginReference extractReference(Message message) {
-            return null;
+        public List<OriginReference> extractReference(Message message) {
+            return List.of();
         }
     }
 
