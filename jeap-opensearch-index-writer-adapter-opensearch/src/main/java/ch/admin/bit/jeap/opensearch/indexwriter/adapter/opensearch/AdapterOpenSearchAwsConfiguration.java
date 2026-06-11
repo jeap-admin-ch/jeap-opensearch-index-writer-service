@@ -1,7 +1,6 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.opensearch.client.json.jackson.JacksonJsonpMapper;
+import org.opensearch.client.json.jackson3.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.aws.AwsSdk2Transport;
 import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
@@ -14,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
+import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration(before = AdapterOpenSearchConfiguration.class)
 @ConditionalOnClass(UrlConnectionHttpClient.class)
@@ -23,7 +23,7 @@ public class AdapterOpenSearchAwsConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    OpenSearchClient openSearchClient(AdapterOpenSearchProperties properties, ObjectMapper objectMapper) {
+    OpenSearchClient openSearchClient(AdapterOpenSearchProperties properties, JsonMapper jsonMapper) {
         var httpClient = UrlConnectionHttpClient.builder().build();
         return new OpenSearchClient(
                 new AwsSdk2Transport(
@@ -33,7 +33,7 @@ public class AdapterOpenSearchAwsConfiguration {
                         Region.of(properties.getSigningRegion()),
                         AwsSdk2TransportOptions.builder()
                                 .setCredentials(DefaultCredentialsProvider.builder().build())
-                                .setMapper(new JacksonJsonpMapper(objectMapper))
+                                .setMapper(new JacksonJsonpMapper(jsonMapper))
                                 .build()
                 )
         );

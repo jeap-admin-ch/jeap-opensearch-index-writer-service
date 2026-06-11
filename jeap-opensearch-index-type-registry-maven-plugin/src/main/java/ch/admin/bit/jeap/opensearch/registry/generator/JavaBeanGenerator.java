@@ -1,9 +1,10 @@
 package ch.admin.bit.jeap.opensearch.registry.generator;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.Log;
+import tools.jackson.core.exc.JacksonIOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -11,7 +12,7 @@ import java.nio.file.Files;
 import java.util.*;
 
 public class JavaBeanGenerator {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     private final File outputDirectory;
     private final String basePackage;
@@ -48,8 +49,8 @@ public class JavaBeanGenerator {
 
         JsonNode latestMapping;
         try {
-            latestMapping = OBJECT_MAPPER.readTree(latestMappingFile);
-        } catch (IOException e) {
+            latestMapping = JSON_MAPPER.readTree(latestMappingFile);
+        } catch (JacksonIOException e) {
             throw new MojoExecutionException("Cannot read mapping file: " + latestMappingFile, e);
         }
 
@@ -83,7 +84,7 @@ public class JavaBeanGenerator {
         for (Map.Entry<String, JsonNode> entry : propertiesNode.properties()) {
             String jsonName = entry.getKey();
             String javaName = OpenSearchTypeMapper.toCamelCase(jsonName);
-            String osType = entry.getValue().path("type").asText("object");
+            String osType = entry.getValue().path("type").asString("object");
 
             if ("object".equals(osType) || "nested".equals(osType)) {
                 JsonNode nestedProps = entry.getValue().path("properties");
@@ -117,7 +118,7 @@ public class JavaBeanGenerator {
         for (File f : allMinorMappings) {
             if (f.equals(allMinorMappings.getLast())) continue; // skip latest
             try {
-                JsonNode mapping = OBJECT_MAPPER.readTree(f);
+                JsonNode mapping = JSON_MAPPER.readTree(f);
                 JsonNode dataProps = mapping.path("mappings").path("properties").path("data").path("properties");
                 SequencedMap<String, FieldDef> fields = extractFields(dataProps, "");
                 if (!fields.keySet().equals(latestFields.keySet())) {
@@ -127,7 +128,7 @@ public class JavaBeanGenerator {
                         result.add(fields);
                     }
                 }
-            } catch (IOException e) {
+            } catch (JacksonIOException e) {
                 throw new MojoExecutionException("Cannot read mapping file for compat constructors: " + f, e);
             }
         }
@@ -153,7 +154,7 @@ public class JavaBeanGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("package ").append(pkg).append(";\n\n");
         if (needsJsonProperty) sb.append("import com.fasterxml.jackson.annotation.JsonProperty;\n");
-        if (needsJsonNode) sb.append("import com.fasterxml.jackson.databind.JsonNode;\n");
+        if (needsJsonNode) sb.append("import tools.jackson.databind.JsonNode;\n");
         if (needsInstant) sb.append("import java.time.Instant;\n");
         sb.append("\n");
 

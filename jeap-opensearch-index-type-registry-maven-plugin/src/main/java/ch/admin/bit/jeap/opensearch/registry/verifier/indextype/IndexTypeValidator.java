@@ -3,13 +3,13 @@ package ch.admin.bit.jeap.opensearch.registry.verifier.indextype;
 import ch.admin.bit.jeap.opensearch.registry.verifier.FileNotChangedValidator;
 import ch.admin.bit.jeap.opensearch.registry.verifier.ValidationContext;
 import ch.admin.bit.jeap.opensearch.registry.verifier.ValidationResult;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import tools.jackson.core.exc.JacksonIOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -21,7 +21,7 @@ import static ch.admin.bit.jeap.opensearch.registry.RegistryConstants.MAPPING_VE
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class IndexTypeValidator {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     private final ValidationContext validationContext;
 
@@ -37,8 +37,8 @@ public class IndexTypeValidator {
 
         JsonNode descriptorJson;
         try {
-            descriptorJson = OBJECT_MAPPER.readTree(validationContext.getDescriptor());
-        } catch (IOException e) {
+            descriptorJson = JSON_MAPPER.readTree(validationContext.getDescriptor());
+        } catch (JacksonIOException e) {
             return ValidationResult.fail("Cannot read descriptor '%s': %s"
                     .formatted(validationContext.getDescriptor().getAbsolutePath(), e.getMessage()));
         }
@@ -53,7 +53,7 @@ public class IndexTypeValidator {
     }
 
     private ValidationResult validateSystemDirectoryMatchesDeclaredSystem(JsonNode descriptorJson) {
-        String declaredSystem = descriptorJson.path("system").asText("");
+        String declaredSystem = descriptorJson.path("system").asString("");
         if (declaredSystem.isBlank()) {
             return ValidationResult.ok();
         }
@@ -81,7 +81,7 @@ public class IndexTypeValidator {
     }
 
     private ValidationResult validateIndexTypeNameStartsWithSystemName(JsonNode descriptorJson) {
-        String declaredSystem = descriptorJson.path("system").asText("");
+        String declaredSystem = descriptorJson.path("system").asString("");
         if (declaredSystem.isBlank()) {
             return ValidationResult.ok();
         }
@@ -109,7 +109,7 @@ public class IndexTypeValidator {
         for (JsonNode versionNode : mappingVersions) {
             int major = versionNode.path("major").asInt(-1);
             int minor = versionNode.path("minor").asInt(-1);
-            String mappingDefinition = versionNode.path(MAPPING_DEFINITION).asText(null);
+            String mappingDefinition = versionNode.path(MAPPING_DEFINITION).asString(null);
 
             if (major < 0 || minor < 0 || mappingDefinition == null) {
                 result = ValidationResult.merge(result, ValidationResult.fail(
@@ -155,8 +155,8 @@ public class IndexTypeValidator {
         }
         JsonNode oldDescriptorJson;
         try {
-            oldDescriptorJson = OBJECT_MAPPER.readTree(oldDescriptor);
-        } catch (IOException e) {
+            oldDescriptorJson = JSON_MAPPER.readTree(oldDescriptor);
+        } catch (JacksonIOException e) {
             return ValidationResult.fail("Cannot read old descriptor '%s': %s"
                     .formatted(oldDescriptor.getAbsolutePath(), e.getMessage()));
         }
@@ -181,7 +181,7 @@ public class IndexTypeValidator {
 
     private static Set<String> rolesFrom(JsonNode descriptor) {
         Set<String> roles = new HashSet<>();
-        descriptor.path("roles").forEach(n -> roles.add(n.asText()));
+        descriptor.path("roles").forEach(n -> roles.add(n.asString()));
         return roles;
     }
 

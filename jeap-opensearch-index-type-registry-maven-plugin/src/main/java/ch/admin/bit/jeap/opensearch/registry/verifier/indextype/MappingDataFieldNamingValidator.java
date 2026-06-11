@@ -1,13 +1,14 @@
 package ch.admin.bit.jeap.opensearch.registry.verifier.indextype;
 
 import ch.admin.bit.jeap.opensearch.registry.verifier.ValidationResult;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import tools.jackson.core.exc.JacksonIOException;
+import tools.jackson.core.exc.StreamReadException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -23,7 +24,7 @@ import java.util.regex.Pattern;
 class MappingDataFieldNamingValidator {
 
     private static final Pattern SNAKE_CASE = Pattern.compile("^[a-z][a-z0-9]*(_[a-z0-9]+)*$");
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     private final File mappingFile;
 
@@ -34,8 +35,8 @@ class MappingDataFieldNamingValidator {
     private ValidationResult validateFieldNames() {
         JsonNode root;
         try {
-            root = OBJECT_MAPPER.readTree(mappingFile);
-        } catch (IOException e) {
+            root = JSON_MAPPER.readTree(mappingFile);
+        } catch (JacksonIOException | StreamReadException _) {
             // IO errors are already caught by IndexTypeMappingSchemaValidator — skip here
             return ValidationResult.ok();
         }

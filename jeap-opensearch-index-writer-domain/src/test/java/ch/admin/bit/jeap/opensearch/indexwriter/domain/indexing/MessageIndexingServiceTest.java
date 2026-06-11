@@ -14,9 +14,8 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.Origin
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.ReferenceProvider;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +26,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.togglz.core.manager.FeatureManager;
 import org.togglz.core.util.NamedFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.List;
@@ -64,7 +64,7 @@ class MessageIndexingServiceTest {
     private SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private JsonMapper jsonMapper = new JsonMapper();
 
     @InjectMocks
     private MessageIndexingService service;
@@ -314,7 +314,7 @@ class MessageIndexingServiceTest {
         when(indexType.dataClass()).thenReturn((Class) TypedData.class);
         when(indexType.originType()).thenReturn(INDEX_TYPE);
         doThrow(new IllegalArgumentException("simulated Jackson failure"))
-                .when(objectMapper).convertValue(any(), any(Class.class));
+                .when(jsonMapper).convertValue(any(), any(Class.class));
 
         assertThatThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)))
                 .isInstanceOf(IndexingException.class)

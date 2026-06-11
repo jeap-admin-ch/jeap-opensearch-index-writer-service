@@ -7,9 +7,9 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.MessageCon
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.MessageOperationConfig;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.condition.IndexingCondition;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.ReferenceProvider;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.json.JsonMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

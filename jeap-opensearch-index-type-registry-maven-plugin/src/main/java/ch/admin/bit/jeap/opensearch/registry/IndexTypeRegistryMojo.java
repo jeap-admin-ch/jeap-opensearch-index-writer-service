@@ -9,8 +9,6 @@ import ch.admin.bit.jeap.opensearch.registry.git.GitClientException;
 import ch.admin.bit.jeap.opensearch.registry.verifier.DescriptorDirectoryValidator;
 import ch.admin.bit.jeap.opensearch.registry.verifier.ValidationContext;
 import ch.admin.bit.jeap.opensearch.registry.verifier.ValidationResult;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.apache.maven.plugin.AbstractMojo;
@@ -20,6 +18,9 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.springframework.util.StringUtils;
+import tools.jackson.core.exc.JacksonIOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -64,7 +65,7 @@ import static ch.admin.bit.jeap.opensearch.registry.RegistryConstants.MAPPING_DE
  */
 @Mojo(name = "registry", defaultPhase = LifecyclePhase.VERIFY, threadSafe = true)
 public class IndexTypeRegistryMojo extends AbstractMojo {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     @SuppressWarnings("unused")
     @Getter(AccessLevel.PROTECTED)
@@ -140,7 +141,7 @@ public class IndexTypeRegistryMojo extends AbstractMojo {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try (var paths = Files.walk(tempDir.toPath())) {
                     paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-                } catch (IOException ignored) {
+                } catch (IOException _) {
                 }
             }));
             getLog().info("Cloning '%s' branch '%s' for comparison...".formatted(gitUrl, trunkBranchName));
@@ -207,14 +208,14 @@ public class IndexTypeRegistryMojo extends AbstractMojo {
 
         JsonNode descriptor;
         try {
-            descriptor = OBJECT_MAPPER.readTree(descriptorFile);
-        } catch (IOException e) {
+            descriptor = JSON_MAPPER.readTree(descriptorFile);
+        } catch (JacksonIOException e) {
             throw new MojoExecutionException("Cannot read descriptor: " + descriptorFile, e);
         }
 
-        String system = descriptor.path("system").asText("");
-        String description = descriptor.path("description").asText("");
-        String documentationUrl = descriptor.path("documentationUrl").asText("");
+        String system = descriptor.path("system").asString("");
+        String description = descriptor.path("description").asString("");
+        String documentationUrl = descriptor.path("documentationUrl").asString("");
         List<String> roles = MetaInfIndexTypeWriter.extractRoles(descriptorFile);
 
         JsonNode mappingVersions = descriptor.path("mappingVersions");
@@ -240,7 +241,7 @@ public class IndexTypeRegistryMojo extends AbstractMojo {
 
             // Collect all minor mapping files for this major, sorted ascending
             List<File> allMinorFiles = minors.stream()
-                    .map(v -> new File(indexTypeDir, v.path(MAPPING_DEFINITION).asText()))
+                    .map(v -> new File(indexTypeDir, v.path(MAPPING_DEFINITION).asString()))
                     .toList();
             File latestMappingFile = allMinorFiles.getLast();
 
@@ -250,7 +251,7 @@ public class IndexTypeRegistryMojo extends AbstractMojo {
 
             for (JsonNode v : minors) {
                 int minor = v.path("minor").asInt();
-                String mappingDefinition = v.path(MAPPING_DEFINITION).asText();
+                String mappingDefinition = v.path(MAPPING_DEFINITION).asString();
                 versionEntries.add(new MappingVersionEntry(major, minor, mappingDefinition, indexTypeFqn));
             }
         }

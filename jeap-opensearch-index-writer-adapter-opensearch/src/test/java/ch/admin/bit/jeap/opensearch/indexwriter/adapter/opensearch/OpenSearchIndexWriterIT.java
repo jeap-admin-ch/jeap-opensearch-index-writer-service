@@ -4,15 +4,12 @@ import ch.admin.bit.jeap.opensearch.indextype.Origin;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItem;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemMetadata;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hc.core5.http.HttpHost;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.json.JsonData;
-import org.opensearch.client.json.jackson.JacksonJsonpMapper;
+import org.opensearch.client.json.jackson3.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch.core.ExistsRequest;
 import org.opensearch.client.opensearch.indices.*;
@@ -24,6 +21,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -34,8 +32,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Map;import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static tools.jackson.databind.cfg.DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS;
 
 @Testcontainers
 class OpenSearchIndexWriterIT {
@@ -79,16 +80,16 @@ class OpenSearchIndexWriterIT {
     static void setup() throws Exception {
         openSearchUrl = "http://" + OPENSEARCH.getHost() + ":" + OPENSEARCH.getMappedPort(9200);
         String url = openSearchUrl;
-        ObjectMapper objectMapper = JsonMapper.builder()
-                .addModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+        JsonMapper jsonMapper = JsonMapper.builder()
+                .disable(WRITE_DATES_AS_TIMESTAMPS)
                 .build();
+
         var transport = ApacheHttpClient5TransportBuilder
                 .builder(HttpHost.create(url))
-                .setMapper(new JacksonJsonpMapper(objectMapper))
+                .setMapper(new JacksonJsonpMapper(jsonMapper))
                 .build();
         client = new OpenSearchClient(transport);
-        DataFieldValidator dataFieldValidator = new DataFieldValidator(objectMapper);
+        DataFieldValidator dataFieldValidator = new DataFieldValidator(jsonMapper);
         IndexTemplateManager indexTemplateManager = new IndexTemplateManager(client);
         IndexMappingManager indexMappingManager = new IndexMappingManager(client, dataFieldValidator);
         indexWriter = new OpenSearchIndexWriter(client, dataFieldValidator, indexTemplateManager, indexMappingManager);
@@ -127,9 +128,9 @@ class OpenSearchIndexWriterIT {
 
         GetMappingResponse mappingResp = client.indices().getMapping(
                 new GetMappingRequest.Builder().index(PHYSICAL_INDEX).build());
-        IndexMappingRecord record = mappingResp.result().get(PHYSICAL_INDEX);
-        assertThat(record).isNotNull();
-        Map<String, JsonData> meta = record.mappings().meta();
+        IndexMappingRecord indexMappingRecord = mappingResp.result().get(PHYSICAL_INDEX);
+        assertThat(indexMappingRecord).isNotNull();
+        Map<String, JsonData> meta = indexMappingRecord.mappings().meta();
         assertThat(meta).containsKey(IndexMappingManager.SCHEMA_VERSION_META_KEY);
         String schemaVersion = meta.get(IndexMappingManager.SCHEMA_VERSION_META_KEY)
                 .to(String.class, client._transport().jsonpMapper());
@@ -206,8 +207,9 @@ class OpenSearchIndexWriterIT {
     }
 
     private record OrderData(
-            @com.fasterxml.jackson.annotation.JsonProperty("order_date") String orderDate,
-            @com.fasterxml.jackson.annotation.JsonProperty("customer_name") String customerName) {}
+            @JsonProperty("order_date") String orderDate,
+            @JsonProperty("customer_name") String customerName) {
+    }
 
     @Test
     void upsertSearchItem_writesTypedDataClassWithSnakeCaseFieldNames() throws Exception {
@@ -220,10 +222,11 @@ class OpenSearchIndexWriterIT {
         refreshIndex();
         String raw = httpGet(openSearchUrl + "/" + PHYSICAL_INDEX + "/_doc/" + docId);
         String source = prettyJson(raw);
-        assertThat(source).contains("order_date");
-        assertThat(source).contains("customer_name");
-        assertThat(source).doesNotContain("orderDate");
-        assertThat(source).doesNotContain("customerName");
+        assertThat(source)
+                .contains("order_date")
+                .contains("customer_name")
+                .doesNotContain("orderDate")
+                .doesNotContain("customerName");
     }
 
     @Test

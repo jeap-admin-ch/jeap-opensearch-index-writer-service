@@ -1,13 +1,13 @@
 package ch.admin.bit.jeap.opensearch.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.maven.api.plugin.testing.Basedir;
 import org.apache.maven.api.plugin.testing.InjectMojo;
 import org.apache.maven.api.plugin.testing.MojoTest;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.lang.reflect.Field;
@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 @MojoTest
 class IndexTypeRegistryMojoTest {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     @Test
     @Basedir("src/test/resources/valid")
@@ -75,11 +75,11 @@ class IndexTypeRegistryMojoTest {
 
         File indexTypesFile = new File(outputResourcesDir, "META-INF/index-types.json");
         assertThat(indexTypesFile).exists();
-        JsonNode root = OBJECT_MAPPER.readTree(indexTypesFile);
+        JsonNode root = JSON_MAPPER.readTree(indexTypesFile);
         JsonNode indexTypes = root.path("indexTypes");
         assertThat(indexTypes.isArray()).isTrue();
         assertThat(indexTypes).hasSize(1);
-        assertThat(indexTypes.get(0).path("indexTypeName").asText()).isEqualTo("JmeDecreeDocument");
+        assertThat(indexTypes.get(0).path("indexTypeName").asString()).isEqualTo("JmeDecreeDocument");
 
         assertThat(project.getCompileSourceRoots()).contains(outputDir.getAbsolutePath());
     }

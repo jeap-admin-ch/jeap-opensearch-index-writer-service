@@ -1,13 +1,14 @@
 package ch.admin.bit.jeap.opensearch.registry.deploy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.shared.invoker.*;
 import org.springframework.util.StringUtils;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,7 +20,7 @@ import java.util.Properties;
 
 public class IndexTypeArtifactDeployer {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     private static final List<String> ALREADY_EXISTS_PATTERNS = List.of(
             "409", "already exists", "artifact already deployed",
@@ -119,11 +120,13 @@ public class IndexTypeArtifactDeployer {
 
     private void writeIndexTypesJson(String artifactId, JsonNode entry, File tempDir)
             throws IOException {
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
-        root.putArray("indexTypes").add(entry);
+        ObjectNode root = JSON_MAPPER.createObjectNode();
+        ArrayNode indexTypesArray = JSON_MAPPER.createArrayNode();
+        indexTypesArray.add(entry);
+        root.set("indexTypes", indexTypesArray);
         Path target = tempDir.toPath().resolve("src/main/resources/META-INF/index-types.json");
         Files.createDirectories(target.getParent());
-        Files.writeString(target, OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root));
+        Files.writeString(target, JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root));
     }
 
     private File generatePomFile(String groupId, String artifactId, String version,
@@ -268,7 +271,7 @@ public class IndexTypeArtifactDeployer {
     private void deleteTempDir(File dir) {
         try (var paths = Files.walk(dir.toPath())) {
             paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-        } catch (IOException ignored) {
+        } catch (IOException _) {
             // do ignore
         }
     }

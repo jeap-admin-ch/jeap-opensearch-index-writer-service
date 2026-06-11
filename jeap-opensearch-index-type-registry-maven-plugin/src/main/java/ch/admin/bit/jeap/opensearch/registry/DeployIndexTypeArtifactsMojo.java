@@ -5,9 +5,6 @@ import ch.admin.bit.jeap.opensearch.registry.deploy.IndexTypeArtifactDeployer.In
 import ch.admin.bit.jeap.opensearch.registry.generator.JavaBeanGenerator;
 import ch.admin.bit.jeap.opensearch.registry.git.GitClient;
 import ch.admin.bit.jeap.opensearch.registry.git.GitClientException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.apache.maven.plugin.AbstractMojo;
@@ -16,6 +13,10 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.File;
 import java.io.IOException;
@@ -49,7 +50,7 @@ import static org.springframework.util.StringUtils.hasText;
 @Mojo(name = "deploy-index-type-artifacts", defaultPhase = LifecyclePhase.DEPLOY)
 public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     /**
      * {@code install} to install to the local repository, {@code deploy} to deploy to a remote repository.
@@ -242,7 +243,7 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try (var paths = Files.walk(tempDir.toPath())) {
                     paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-                } catch (IOException ignored) {
+                } catch (IOException _) {
                     // do ignore
                 }
             }));
@@ -304,7 +305,7 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
     // Index type discovery
     // -------------------------------------------------------------------------
 
-    List<IndexTypeInfo> discoverIndexTypes() throws MojoExecutionException {
+    List<IndexTypeInfo> discoverIndexTypes() {
         List<IndexTypeInfo> result = new ArrayList<>();
         if (!descriptorDirectory.isDirectory()) return result;
 
@@ -328,8 +329,7 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
         return result;
     }
 
-    private List<IndexTypeInfo> buildInfosPerMajorVersion(String systemName, File indexTypeDir,
-                                                          List<JsonNode> allEntries) throws MojoExecutionException {
+    private List<IndexTypeInfo> buildInfosPerMajorVersion(String systemName, File indexTypeDir, List<JsonNode> allEntries) {
         String indexTypeName = findIndexTypeName(indexTypeDir);
         if (indexTypeName == null) return List.of();
 
@@ -351,7 +351,7 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
                 JavaBeanGenerator.packageFor(basePackage, systemName, indexTypeName).replace('.', '/'));
         File mappingsDir = new File(outputResourcesDirectory, "opensearch");
         JsonNode fullEntry = allEntries.stream()
-                .filter(e -> indexTypeName.equals(e.path("indexTypeName").asText()))
+                .filter(e -> indexTypeName.equals(e.path("indexTypeName").asString()))
                 .findFirst().orElse(null);
 
         List<IndexTypeInfo> result = new ArrayList<>();
@@ -392,24 +392,21 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
         return result;
     }
 
-    private JsonNode readDescriptor(File indexTypeDir, String indexTypeName) throws MojoExecutionException {
+    private JsonNode readDescriptor(File indexTypeDir, String indexTypeName) {
         File descriptorFile = new File(indexTypeDir, indexTypeName + ".json");
         if (!descriptorFile.exists()) {
             return null;
         }
-        try {
-            return OBJECT_MAPPER.readTree(descriptorFile);
-        } catch (IOException e) {
-            throw new MojoExecutionException("Cannot read descriptor " + descriptorFile, e);
-        }
+        return JSON_MAPPER.readTree(descriptorFile);
     }
 
     private JsonNode filterEntryForMajor(JsonNode entry, int major) {
         if (entry == null) {
             return null;
         }
-        ObjectNode filtered = entry.deepCopy();
-        com.fasterxml.jackson.databind.node.ArrayNode filteredVersions = filtered.putArray(MAPPING_VERSIONS);
+        ObjectNode filtered = ((ObjectNode) entry.deepCopy());
+        ArrayNode filteredVersions = JSON_MAPPER.createArrayNode();
+        filtered.set(MAPPING_VERSIONS, filteredVersions);
         JsonNode versions = entry.path(MAPPING_VERSIONS);
         if (versions.isArray()) {
             for (JsonNode v : versions) {
@@ -449,16 +446,12 @@ public class DeployIndexTypeArtifactsMojo extends AbstractMojo {
     /**
      * Reads the flat list of index type entries from the {@code indexTypes} array in the JSON file.
      */
-    private List<JsonNode> readIndexTypesJson(File file) throws MojoExecutionException {
+    private List<JsonNode> readIndexTypesJson(File file) {
         if (!file.exists()) return List.of();
-        try {
-            List<JsonNode> entries = new ArrayList<>();
-            JsonNode root = OBJECT_MAPPER.readTree(file);
-            JsonNode array = root.path("indexTypes");
-            if (array.isArray()) array.forEach(entries::add);
-            return entries;
-        } catch (IOException e) {
-            throw new MojoExecutionException("Cannot read " + file, e);
-        }
+        List<JsonNode> entries = new ArrayList<>();
+        JsonNode root = JSON_MAPPER.readTree(file);
+        JsonNode array = root.path("indexTypes");
+        if (array.isArray()) array.forEach(entries::add);
+        return entries;
     }
 }

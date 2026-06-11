@@ -1,22 +1,13 @@
 package ch.admin.bit.jeap.opensearch.client.search;
 
-import ch.admin.bit.jeap.opensearch.client.auth.Authorization;
-import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAccessDeniedException;
-import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAuthorization;
-import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
-import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
-import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
+import ch.admin.bit.jeap.opensearch.client.auth.*;
 import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestData;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestDataV2;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestIndexType;
 import ch.admin.bit.jeap.opensearch.client.search.SearchTestData.TestIndexTypeV2;
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
-import ch.admin.bit.jeap.opensearch.client.search.SearchItemClientException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +23,10 @@ import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
 import org.opensearch.client.opensearch.core.search.HitsMetadata;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.exc.MismatchedInputException;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.util.List;
@@ -42,10 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SearchItemClientTest {
@@ -62,7 +54,7 @@ class SearchItemClientTest {
     @Mock
     private IndexTypeAuthorization mockIndexTypeAuthorization;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper jsonMapper = new JsonMapper();
     private final IndexTypeAuthorization indexTypeAuthorization = new IndexTypeAuthorization();
 
     private TestIndexType indexType;
@@ -79,7 +71,7 @@ class SearchItemClientTest {
     private SearchItemClient newClient() {
         return new SearchItemClient(
                 openSearchClient,
-                objectMapper,
+                jsonMapper,
                 indexTypeAuthorization,
                 searchItemAuthorization,
                 userSearchItemAuthorization);
@@ -168,7 +160,7 @@ class SearchItemClientTest {
         void deserializationError_wrappedInSearchItemClientException() throws IOException {
             SearchItemClient sut = newClient();
             // Build a doc with valid search_item.major_version=1 but bad data field.
-            ObjectNode root = objectMapper.createObjectNode();
+            ObjectNode root = jsonMapper.createObjectNode();
             ObjectNode originNode = root.putObject("origin");
             originNode.put("id", "id-1");
             originNode.put("version", "1");
@@ -184,7 +176,7 @@ class SearchItemClientTest {
                     sut.searchMultiVersionUnchecked(types, query))
                     .isInstanceOfSatisfying(SearchItemClientException.class, ex ->
                             assertThat(ex.getCause())
-                                    .isInstanceOfAny(JsonProcessingException.class, IllegalArgumentException.class));
+                                    .isInstanceOfAny(MismatchedInputException.class, IllegalArgumentException.class));
         }
 
         @Test
@@ -212,9 +204,9 @@ class SearchItemClientTest {
         void deserialisesV1AndV2Hits_withCorrectIndexType() throws IOException {
             SearchItemClient sut = newClient();
             JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+                    jsonMapper, "id-1", "BP1", "label", "alpha", 1);
             JsonNode s2 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-2", "BP2", "name", "beta", 2);
+                    jsonMapper, "id-2", "BP2", "name", "beta", 2);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
 
             List<SearchItemView> result = sut.searchMultiVersionUnchecked(
@@ -233,9 +225,9 @@ class SearchItemClientTest {
         @Test
         void docMissingMajorVersion_throwsSearchItemClientException() throws IOException {
             SearchItemClient sut = newClient();
-            JsonNode s1 = SearchTestData.sourceJson(objectMapper, "id-1", "BP1", "alpha");
+            JsonNode s1 = SearchTestData.sourceJson(jsonMapper, "id-1", "BP1", "alpha");
             JsonNode s2 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-2", "BP2", "label", "beta", 1);
+                    jsonMapper, "id-2", "BP2", "label", "beta", 1);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
 
             assertThatThrownBy(() ->
@@ -251,9 +243,9 @@ class SearchItemClientTest {
         void docUnknownMajorVersion_throwsSearchItemClientException() throws IOException {
             SearchItemClient sut = newClient();
             JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+                    jsonMapper, "id-1", "BP1", "label", "alpha", 1);
             JsonNode sUnknown = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-99", "BP1", "label", "orphan", 99);
+                    jsonMapper, "id-99", "BP1", "label", "orphan", 99);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d99", sUnknown)));
 
             assertThatThrownBy(() ->
@@ -269,7 +261,7 @@ class SearchItemClientTest {
         void nullSource_isSilentlyDropped() throws IOException {
             SearchItemClient sut = newClient();
             JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+                    jsonMapper, "id-1", "BP1", "label", "alpha", 1);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", null)));
 
             List<SearchItemView> result = sut.searchMultiVersionUnchecked(
@@ -380,9 +372,9 @@ class SearchItemClientTest {
         void postFilter_dropsUnauthorisedItems() throws IOException {
             SearchItemClient sut = newClient();
             JsonNode s1 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-1", "BP1", "label", "alpha", 1);
+                    jsonMapper, "id-1", "BP1", "label", "alpha", 1);
             JsonNode s2 = SearchTestData.sourceJsonWithMajorVersion(
-                    objectMapper, "id-2", "BP2", "label", "beta", 1);
+                    jsonMapper, "id-2", "BP2", "label", "beta", 1);
             whenSearchReturnsHits(List.of(mockHit("d1", s1), mockHit("d2", s2)));
             when(searchItemAuthorization.filterByAuthorization(any(), eq(globalAuth), any()))
                     .thenAnswer(inv -> {
@@ -458,7 +450,7 @@ class SearchItemClientTest {
     private SearchItemClient newClientWithPermissiveIndexTypeAuth() {
         return new SearchItemClient(
                 openSearchClient,
-                objectMapper,
+                jsonMapper,
                 mockIndexTypeAuthorization,    // no-op checkAccess
                 new SearchItemAuthorization(), // real post-filter
                 userSearchItemAuthorization);

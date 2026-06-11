@@ -6,8 +6,6 @@ import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.client.search.SearchItemClientIT.TestConfig;
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indextype.Origin;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.FieldValue;
@@ -15,14 +13,16 @@ import org.opensearch.client.opensearch._types.Refresh;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.testcontainers.OpensearchContainer;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -67,7 +67,7 @@ class SearchItemClientIT {
     private OpenSearchClient openSearchClient;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private JsonMapper jsonMapper;
 
     private static volatile boolean indexInitialised;
     private static volatile boolean multiVersionIndexInitialised;
@@ -99,7 +99,7 @@ class SearchItemClientIT {
     }
 
     private void indexDocument(String id, String bpId, String label) throws IOException {
-        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode root = jsonMapper.createObjectNode();
         ObjectNode originNode = root.putObject("origin");
         originNode.put("id", id);
         originNode.put("version", "1");
@@ -244,7 +244,7 @@ class SearchItemClientIT {
 
     private void indexVersionedDocument(String index, String id, String bpId,
                                         String label, String name, int majorVersion) throws IOException {
-        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode root = jsonMapper.createObjectNode();
         ObjectNode originNode = root.putObject("origin");
         originNode.put("id", id);
         originNode.put("version", "1");

@@ -1,11 +1,10 @@
 package ch.admin.bit.jeap.opensearch.indextype;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 
@@ -18,13 +17,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class JsonSerializationTest {
 
-    private ObjectMapper mapper;
+    private JsonMapper mapper;
 
     @BeforeEach
     void setUp() {
-        mapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mapper = JsonMapper.builder()
+                .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
     }
 
     @Test
@@ -48,7 +47,7 @@ class JsonSerializationTest {
         JsonNode json = mapper.valueToTree(origin);
 
         assertThat(json.has("bp_id")).isTrue();
-        assertThat(json.path("bp_id").asText()).isEqualTo("bp-42");
+        assertThat(json.path("bp_id").asString()).isEqualTo("bp-42");
     }
 
     @Test
@@ -66,7 +65,7 @@ class JsonSerializationTest {
     }
 
     @Test
-    void enrichedSearchItemRoundTrips() throws Exception {
+    void enrichedSearchItemRoundTrips() {
         SearchItemMetadata meta = new SearchItemMetadata(Instant.EPOCH, 1, 0);
         Origin origin = new Origin("id-rt", "v2", "bp-rt", null, Instant.EPOCH, Instant.EPOCH, null);
         SearchItemIndexed<String> original = new SearchItemIndexed<>(meta, origin, "data");
@@ -80,7 +79,7 @@ class JsonSerializationTest {
         assertThat(deserialized.origin().id()).isEqualTo("id-rt");
         assertThat(deserialized.origin().bpId()).isEqualTo("bp-rt");
         assertThat(deserialized.searchItem().majorVersion()).isEqualTo(1);
-        assertThat(deserialized.searchItem().minorVersion()).isEqualTo(0);
+        assertThat(deserialized.searchItem().minorVersion()).isZero();
     }
 
     @Test

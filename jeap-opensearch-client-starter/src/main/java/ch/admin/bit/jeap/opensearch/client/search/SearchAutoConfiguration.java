@@ -3,11 +3,11 @@ package ch.admin.bit.jeap.opensearch.client.search;
 import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
 public class SearchAutoConfiguration {
@@ -16,11 +16,11 @@ public class SearchAutoConfiguration {
     @ConditionalOnMissingBean
     SearchItemClient searchItemClient(
             OpenSearchClient openSearchClient,
-            ObjectMapper objectMapper,
+            JsonMapper jsonMapper,
             IndexTypeAuthorization indexTypeAuthorization,
             SearchItemAuthorization searchItemAuthorization,
             UserSearchItemAuthorization userSearchItemAuthorization) {
-        return new SearchItemClient(openSearchClient, objectMapper, indexTypeAuthorization,
+        return new SearchItemClient(openSearchClient, jsonMapper, indexTypeAuthorization,
                 searchItemAuthorization, userSearchItemAuthorization);
     }
 }

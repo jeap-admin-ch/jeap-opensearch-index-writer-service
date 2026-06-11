@@ -1,11 +1,11 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch;
 
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.json.JsonObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -20,7 +20,7 @@ class DataFieldValidator {
     private static final String PROPERTIES_JSON_KEY = "properties";
     private static final String DATA_JSON_KEY = "data";
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
     private final Map<String, Set<String>> declaredDataFieldsByAlias = new ConcurrentHashMap<>();
 
     void cacheMapping(String indexWriteAlias, JsonObject mappings) {
@@ -42,14 +42,14 @@ class DataFieldValidator {
         if (declaredFields == null || searchItem.data() == null) {
             return;
         }
-        JsonNode dataNode = objectMapper.valueToTree(searchItem.data());
+        JsonNode dataNode = jsonMapper.valueToTree(searchItem.data());
         if (!dataNode.isObject()) {
             return;
         }
         Set<String> undeclared = new HashSet<>();
-        dataNode.fieldNames().forEachRemaining(field -> {
-            if (!declaredFields.contains(field)) {
-                undeclared.add(field);
+        dataNode.properties().forEach(entry -> {
+            if (!declaredFields.contains(entry.getKey())) {
+                undeclared.add(entry.getKey());
             }
         });
         if (!undeclared.isEmpty()) {

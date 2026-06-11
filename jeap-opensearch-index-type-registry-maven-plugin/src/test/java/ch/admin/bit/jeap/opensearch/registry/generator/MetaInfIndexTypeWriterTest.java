@@ -1,12 +1,12 @@
 package ch.admin.bit.jeap.opensearch.registry.generator;
 
 import ch.admin.bit.jeap.opensearch.registry.TestRegistryBuilder;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,12 +17,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class MetaInfIndexTypeWriterTest {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     @Test
     void writesIndexTypesJsonToMetaInf(@TempDir File outputDir, @TempDir File indexTypeDir)
             throws IOException, MojoExecutionException {
-        File mappingFile = writeMapping(indexTypeDir, "JmeDecreeDocument_mapping_v1_0.json",
+        File mappingFile = writeContent(indexTypeDir, "JmeDecreeDocument_mapping_v1_0.json",
                 TestRegistryBuilder.VALID_MAPPING_V1_0);
 
         MetaInfIndexTypeWriter writer = new MetaInfIndexTypeWriter(outputDir, new SystemStreamLog());
@@ -34,7 +34,7 @@ class MetaInfIndexTypeWriterTest {
         File indexTypesJson = new File(outputDir, "META-INF/index-types.json");
         assertThat(indexTypesJson).exists();
 
-        JsonNode root = OBJECT_MAPPER.readTree(indexTypesJson);
+        JsonNode root = JSON_MAPPER.readTree(indexTypesJson);
         assertThat(root.path("indexTypes").isArray()).isTrue();
         assertThat(root.path("indexTypes").size()).isEqualTo(1);
     }
@@ -42,7 +42,7 @@ class MetaInfIndexTypeWriterTest {
     @Test
     void indexTypesJsonContainsCorrectFields(@TempDir File outputDir, @TempDir File indexTypeDir)
             throws IOException, MojoExecutionException {
-        File mappingFile = writeMapping(indexTypeDir, "MyType_mapping_v1_0.json",
+        File mappingFile = writeContent(indexTypeDir, "MyType_mapping_v1_0.json",
                 TestRegistryBuilder.VALID_MAPPING_V1_0);
 
         MetaInfIndexTypeWriter writer = new MetaInfIndexTypeWriter(outputDir, new SystemStreamLog());
@@ -51,24 +51,24 @@ class MetaInfIndexTypeWriterTest {
                         "com.example.MyTypeV1")),
                 indexTypeDir)));
 
-        JsonNode indexType = OBJECT_MAPPER.readTree(new File(outputDir, "META-INF/index-types.json"))
+        JsonNode indexType = JSON_MAPPER.readTree(new File(outputDir, "META-INF/index-types.json"))
                 .path("indexTypes").get(0);
 
-        assertThat(indexType.path("indexTypeName").asText()).isEqualTo("MyType");
-        assertThat(indexType.path("system").asText()).isEqualTo("SYS");
+        assertThat(indexType.path("indexTypeName").asString()).isEqualTo("MyType");
+        assertThat(indexType.path("system").asString()).isEqualTo("SYS");
         assertThat(indexType.path("roles").size()).isEqualTo(2);
-        assertThat(indexType.path("roles").get(0).asText()).isEqualTo("role_read");
-        assertThat(indexType.path("roles").get(1).asText()).isEqualTo("role_admin");
+        assertThat(indexType.path("roles").get(0).asString()).isEqualTo("role_read");
+        assertThat(indexType.path("roles").get(1).asString()).isEqualTo("role_admin");
         assertThat(indexType.path("mappingVersions").get(0).path("major").asInt()).isEqualTo(1);
-        assertThat(indexType.path("mappingVersions").get(0).path("minor").asInt()).isEqualTo(0);
-        assertThat(indexType.path("mappingVersions").get(0).path("beanClassName").asText())
+        assertThat(indexType.path("mappingVersions").get(0).path("minor").asInt()).isZero();
+        assertThat(indexType.path("mappingVersions").get(0).path("beanClassName").asString())
                 .isEqualTo("com.example.MyTypeV1");
     }
 
     @Test
     void copiesMappingFilesToMetaInf(@TempDir File outputDir, @TempDir File indexTypeDir)
             throws IOException, MojoExecutionException {
-        File mappingFile = writeMapping(indexTypeDir, "JmeDecreeDocument_mapping_v1_0.json",
+        File mappingFile = writeContent(indexTypeDir, "JmeDecreeDocument_mapping_v1_0.json",
                 TestRegistryBuilder.VALID_MAPPING_V1_0);
 
         MetaInfIndexTypeWriter writer = new MetaInfIndexTypeWriter(outputDir, new SystemStreamLog());
@@ -85,8 +85,8 @@ class MetaInfIndexTypeWriterTest {
     @Test
     void multipleIndexTypesAreAllWritten(@TempDir File outputDir, @TempDir File indexTypeDir)
             throws IOException, MojoExecutionException {
-        File mapping1 = writeMapping(indexTypeDir, "TypeA_mapping_v1_0.json", TestRegistryBuilder.VALID_MAPPING_V1_0);
-        File mapping2 = writeMapping(indexTypeDir, "TypeB_mapping_v1_0.json", TestRegistryBuilder.VALID_MAPPING_V1_0);
+        File mapping1 = writeContent(indexTypeDir, "TypeA_mapping_v1_0.json", TestRegistryBuilder.VALID_MAPPING_V1_0);
+        File mapping2 = writeContent(indexTypeDir, "TypeB_mapping_v1_0.json", TestRegistryBuilder.VALID_MAPPING_V1_0);
 
         MetaInfIndexTypeWriter writer = new MetaInfIndexTypeWriter(outputDir, new SystemStreamLog());
         writer.write(List.of(
@@ -97,20 +97,20 @@ class MetaInfIndexTypeWriterTest {
                         List.of(new MetaInfIndexTypeWriter.MappingVersionEntry(1, 0, mapping2.getName(), "SysTypeBV1")),
                         indexTypeDir)));
 
-        JsonNode root = OBJECT_MAPPER.readTree(new File(outputDir, "META-INF/index-types.json"));
+        JsonNode root = JSON_MAPPER.readTree(new File(outputDir, "META-INF/index-types.json"));
         assertThat(root.path("indexTypes").size()).isEqualTo(2);
     }
 
     @Test
     void extractRolesFromDescriptor(@TempDir File dir) throws IOException, MojoExecutionException {
-        File descriptor = writeDescriptor(dir, "Foo.json", TestRegistryBuilder.VALID_DESCRIPTOR);
+        File descriptor = writeContent(dir, "Foo.json", TestRegistryBuilder.VALID_DESCRIPTOR);
         List<String> roles = MetaInfIndexTypeWriter.extractRoles(descriptor);
         assertThat(roles).containsExactly("jme_read");
     }
 
     @Test
     void extractSystemFromDescriptor(@TempDir File dir) throws IOException, MojoExecutionException {
-        File descriptor = writeDescriptor(dir, "Foo.json", TestRegistryBuilder.VALID_DESCRIPTOR);
+        File descriptor = writeContent(dir, "Foo.json", TestRegistryBuilder.VALID_DESCRIPTOR);
         String system = MetaInfIndexTypeWriter.extractSystem(descriptor);
         assertThat(system).isEqualTo("JME");
     }
@@ -124,15 +124,10 @@ class MetaInfIndexTypeWriterTest {
                 typeName, system, roles, versions, indexTypeDir);
     }
 
-    private File writeMapping(File dir, String name, String content) throws IOException {
+    private File writeContent(File dir, String name, String content) throws IOException {
         File f = new File(dir, name);
         Files.writeString(f.toPath(), content);
         return f;
     }
 
-    private File writeDescriptor(File dir, String name, String content) throws IOException {
-        File f = new File(dir, name);
-        Files.writeString(f.toPath(), content);
-        return f;
-    }
 }

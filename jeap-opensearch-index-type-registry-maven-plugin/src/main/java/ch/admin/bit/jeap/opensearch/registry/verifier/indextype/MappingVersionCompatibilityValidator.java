@@ -1,13 +1,13 @@
 package ch.admin.bit.jeap.opensearch.registry.verifier.indextype;
 
 import ch.admin.bit.jeap.opensearch.registry.verifier.ValidationResult;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import tools.jackson.core.exc.JacksonIOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +19,7 @@ import java.util.Map;
  */
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 class MappingVersionCompatibilityValidator {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
 
     private final File indexTypeDir;
     private final String indexTypeName;
@@ -65,9 +65,9 @@ class MappingVersionCompatibilityValidator {
         JsonNode prevData;
         JsonNode currData;
         try {
-            prevData = getDataProperties(OBJECT_MAPPER.readTree(prevFile));
-            currData = getDataProperties(OBJECT_MAPPER.readTree(currFile));
-        } catch (IOException e) {
+            prevData = getDataProperties(JSON_MAPPER.readTree(prevFile));
+            currData = getDataProperties(JSON_MAPPER.readTree(currFile));
+        } catch (JacksonIOException e) {
             return ValidationResult.fail("Cannot read mapping file for compatibility check: " + e.getMessage());
         }
 

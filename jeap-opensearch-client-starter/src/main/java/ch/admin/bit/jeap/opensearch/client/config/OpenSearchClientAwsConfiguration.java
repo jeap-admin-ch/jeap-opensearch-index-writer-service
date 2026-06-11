@@ -1,6 +1,6 @@
 package ch.admin.bit.jeap.opensearch.client.config;
 
-import org.opensearch.client.json.jackson.JacksonJsonpMapper;
+import org.opensearch.client.json.jackson3.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.aws.AwsSdk2Transport;
 import org.opensearch.client.transport.aws.AwsSdk2TransportOptions;
@@ -21,7 +21,7 @@ public class OpenSearchClientAwsConfiguration {
     @Bean
     @ConditionalOnMissingBean(OpenSearchClientFactory.class)
     OpenSearchClientFactory awsOpenSearchClientFactory() {
-        return (properties, objectMapper) -> {
+        return (properties, jsonMapper) -> {
             var httpClient = UrlConnectionHttpClient.builder().build();
             return new OpenSearchClient(
                     new AwsSdk2Transport(
@@ -31,7 +31,7 @@ public class OpenSearchClientAwsConfiguration {
                             Region.of(properties.getAwsSigningRegion()),
                             AwsSdk2TransportOptions.builder()
                                     .setCredentials(DefaultCredentialsProvider.builder().build())
-                                    .setMapper(new JacksonJsonpMapper(objectMapper))
+                                    .setMapper(new JacksonJsonpMapper(jsonMapper))
                                     .build()
                     )
             );

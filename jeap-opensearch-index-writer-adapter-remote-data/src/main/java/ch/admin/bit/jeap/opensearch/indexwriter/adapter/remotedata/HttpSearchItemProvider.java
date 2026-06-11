@@ -6,10 +6,10 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.SearchItemProvid
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.SearchItemResult;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.OriginReference;
 import ch.admin.bit.jeap.security.restclient.JeapOAuth2RestClientBuilderFactory;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
-import org.springframework.boot.http.client.ClientHttpRequestFactorySettings;
+import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -106,8 +106,8 @@ class HttpSearchItemProvider implements SearchItemProvider {
     }
 
     private RestClient createRestClient(String oauthClientId) {
-        ClientHttpRequestFactory requestFactory = ClientHttpRequestFactoryBuilder.detect()
-                .build(ClientHttpRequestFactorySettings.defaults().withConnectTimeout(timeout));
+        ClientHttpRequestFactory requestFactory = ClientHttpRequestFactoryBuilder.detect().build(HttpClientSettings.defaults()
+                .withReadTimeout(timeout));
         RestClient.Builder oAuth2RestClientBuilder = jeapOAuth2RestClientBuilderFactory.createForClientRegistryId(oauthClientId);
         return oAuth2RestClientBuilder.requestFactory(requestFactory).build();
     }

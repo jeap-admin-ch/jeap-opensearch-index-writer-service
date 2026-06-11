@@ -3,13 +3,13 @@ package ch.admin.bit.jeap.opensearch.client.search;
 import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
 import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -40,7 +40,7 @@ class SearchAutoConfigurationTest {
                 new UserSearchItemAuthorization(null, new SearchItemAuthorization());
         SearchItemClient custom = new SearchItemClient(
                 mock(OpenSearchClient.class),
-                new ObjectMapper(),
+                new JsonMapper(),
                 new IndexTypeAuthorization(),
                 new SearchItemAuthorization(),
                 usia);
@@ -62,8 +62,8 @@ class SearchAutoConfigurationTest {
         }
 
         @Bean
-        ObjectMapper objectMapper() {
-            return new ObjectMapper();
+        JsonMapper jsonMapper() {
+            return new JsonMapper();
         }
 
         @Bean
@@ -90,8 +90,8 @@ class SearchAutoConfigurationTest {
         }
 
         @Bean
-        ObjectMapper objectMapper() {
-            return new ObjectMapper();
+        JsonMapper jsonMapper() {
+            return new JsonMapper();
         }
 
         @Bean

@@ -1,16 +1,16 @@
 package ch.admin.bit.jeap.opensearch.registry.generator;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.Log;
+import tools.jackson.core.exc.JacksonIOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -24,7 +24,7 @@ import static ch.admin.bit.jeap.opensearch.registry.RegistryConstants.MAPPING_DE
  * and their mapping versions. It is used by the jEAP IndexWriter Service.
  */
 public class MetaInfIndexTypeWriter {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper JSON_MAPPER = new JsonMapper();
     private static final String INDEX_TYPE_SERVICE_FILE = "META-INF/services/ch.admin.bit.jeap.opensearch.indextype.IndexType";
 
     private final File outputResourcesDir;
@@ -48,20 +48,23 @@ public class MetaInfIndexTypeWriter {
             throw new MojoExecutionException("Cannot create META-INF directory", e);
         }
 
-        ObjectNode root = OBJECT_MAPPER.createObjectNode();
-        ArrayNode indexTypesArray = root.putArray("indexTypes");
+        ObjectNode root = JSON_MAPPER.createObjectNode();
+        ArrayNode indexTypesArray = JSON_MAPPER.createArrayNode();
+        root.set("indexTypes", indexTypesArray);
 
         for (IndexTypeEntry entry : indexTypeEntries) {
-            ObjectNode indexTypeNode = OBJECT_MAPPER.createObjectNode();
+            ObjectNode indexTypeNode = JSON_MAPPER.createObjectNode();
             indexTypeNode.put("indexTypeName", entry.indexTypeName());
             indexTypeNode.put("system", entry.system());
 
-            ArrayNode rolesArray = indexTypeNode.putArray("roles");
+            ArrayNode rolesArray = JSON_MAPPER.createArrayNode();
+            indexTypeNode.set("roles", rolesArray);
             entry.roles().forEach(rolesArray::add);
 
-            ArrayNode versionsArray = indexTypeNode.putArray("mappingVersions");
+            ArrayNode versionsArray = JSON_MAPPER.createArrayNode();
+            indexTypeNode.set("mappingVersions", versionsArray);
             for (MappingVersionEntry version : entry.mappingVersions()) {
-                ObjectNode versionNode = OBJECT_MAPPER.createObjectNode();
+                ObjectNode versionNode = JSON_MAPPER.createObjectNode();
                 versionNode.put("major", version.major());
                 versionNode.put("minor", version.minor());
                 versionNode.put(MAPPING_DEFINITION, version.mappingDefinition());
@@ -77,8 +80,8 @@ public class MetaInfIndexTypeWriter {
 
         File indexTypesFile = new File(metaInfDir, "index-types.json");
         try {
-            OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(indexTypesFile, root);
-        } catch (IOException e) {
+            JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValue(indexTypesFile, root);
+        } catch (JacksonIOException e) {
             throw new MojoExecutionException("Cannot write META-INF/index-types.json", e);
         }
         log.info("Written META-INF/index-types.json with %d index types".formatted(indexTypeEntries.size()));
@@ -124,18 +127,16 @@ public class MetaInfIndexTypeWriter {
      */
     public static List<String> extractRoles(File descriptorFile) throws MojoExecutionException {
         try {
-            JsonNode descriptor = OBJECT_MAPPER.readTree(descriptorFile);
+            JsonNode descriptor = JSON_MAPPER.readTree(descriptorFile);
             JsonNode rolesNode = descriptor.path("roles");
             if (!rolesNode.isArray()) {
                 return List.of();
             }
             List<String> roles = new java.util.ArrayList<>();
-            Iterator<JsonNode> elements = rolesNode.elements();
-            while (elements.hasNext()) {
-                roles.add(elements.next().asText());
-            }
+            rolesNode.iterator().forEachRemaining(entry -> roles.add(entry.asString()));
+
             return roles;
-        } catch (IOException e) {
+        } catch (JacksonIOException e) {
             throw new MojoExecutionException("Cannot read descriptor: " + descriptorFile, e);
         }
     }
@@ -143,13 +144,9 @@ public class MetaInfIndexTypeWriter {
     /**
      * Extracts the system name from the descriptor JSON file.
      */
-    public static String extractSystem(File descriptorFile) throws MojoExecutionException {
-        try {
-            JsonNode descriptor = OBJECT_MAPPER.readTree(descriptorFile);
-            return descriptor.path("system").asText("");
-        } catch (IOException e) {
-            throw new MojoExecutionException("Cannot read descriptor: " + descriptorFile, e);
-        }
+    public static String extractSystem(File descriptorFile) {
+        JsonNode descriptor = JSON_MAPPER.readTree(descriptorFile);
+        return descriptor.path("system").asString("");
     }
 
     /**
@@ -158,7 +155,7 @@ public class MetaInfIndexTypeWriter {
     public static List<Map.Entry<Integer, Integer>> extractMappingVersions(File descriptorFile)
             throws MojoExecutionException {
         try {
-            JsonNode descriptor = OBJECT_MAPPER.readTree(descriptorFile);
+            JsonNode descriptor = JSON_MAPPER.readTree(descriptorFile);
             JsonNode versions = descriptor.path("mappingVersions");
             if (!versions.isArray()) {
                 return List.of();
@@ -168,7 +165,7 @@ public class MetaInfIndexTypeWriter {
                 result.add(Map.entry(v.path("major").asInt(), v.path("minor").asInt()));
             }
             return result;
-        } catch (IOException e) {
+        } catch (JacksonIOException e) {
             throw new MojoExecutionException("Cannot read descriptor: " + descriptorFile, e);
         }
     }

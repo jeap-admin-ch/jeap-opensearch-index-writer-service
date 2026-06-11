@@ -10,7 +10,6 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.MessageOpe
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.OriginReference;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.ReferenceProvider;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.togglz.core.manager.FeatureManager;
 import org.togglz.core.util.NamedFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,7 +35,7 @@ public class MessageIndexingService {
     private final IndexTypeRepository indexTypeRepository;
     private final IndexWriter indexWriter;
     private final MeterRegistry meterRegistry;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
 
     public void index(Message message, MessageOperationConfig operation) {
         Timer.Sample sample = Timer.start(meterRegistry);
@@ -98,7 +98,7 @@ public class MessageIndexingService {
     private <T> SearchItemIndexed<T> toSearchItemIndexed(SearchItemResult result, IndexType<T> indexType, SearchItemMetadata metadata) {
         Class<T> dataClass = indexType.dataClass();
         try {
-            T typedData = objectMapper.convertValue(result.searchItem().data(), dataClass);
+            T typedData = jsonMapper.convertValue(result.searchItem().data(), dataClass);
             return new SearchItem<>(result.searchItem().origin(), typedData).withMetadata(metadata);
         } catch (IllegalArgumentException e) {
             throw IndexingException.dataDeserializationFailed(dataClass, indexType.originType(), e);

@@ -6,7 +6,7 @@
     <parent>
         <groupId>ch.admin.bit.jeap</groupId>
         <artifactId>jeap-opensearch-index-writer-service</artifactId>
-        <version>0.17.1-SNAPSHOT</version>
+        <version>0.18.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>jeap-opensearch-client-starter</artifactId>
@@ -17,7 +17,7 @@
     </description>
 
     <properties>
-        <opensearch-java.version>3.8.0</opensearch-java.version>
+        <opensearch-java.version>3.9.0</opensearch-java.version>
         <opensearch-testcontainers.version>2.1.3</opensearch-testcontainers.version>
     </properties>
 
@@ -83,7 +83,12 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

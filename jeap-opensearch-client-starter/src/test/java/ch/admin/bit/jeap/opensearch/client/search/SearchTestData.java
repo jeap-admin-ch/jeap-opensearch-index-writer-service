@@ -1,9 +1,9 @@
 package ch.admin.bit.jeap.opensearch.client.search;
 
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -150,11 +150,11 @@ final class SearchTestData {
 
     /**
      * Source JSON for a hit. {@code created}/{@code modified} are intentionally omitted —
-     * Jackson's vanilla {@code ObjectMapper} doesn't handle {@link java.time.Instant}
+     * Jackson's vanilla {@code JsonMapper} doesn't handle {@link java.time.Instant}
      * without JSR-310, and Jackson treats missing fields as {@code null}.
      */
-    static JsonNode sourceJson(ObjectMapper objectMapper, String id, String bpId, String label) {
-        ObjectNode root = objectMapper.createObjectNode();
+    static JsonNode sourceJson(JsonMapper jsonMapper, String id, String bpId, String label) {
+        ObjectNode root = jsonMapper.createObjectNode();
         ObjectNode originNode = root.putObject("origin");
         originNode.put("id", id);
         originNode.put("version", "1");
@@ -174,10 +174,10 @@ final class SearchTestData {
      * field so that the multi-version dispatch logic can route to the correct
      * {@link IndexType}.
      */
-    static JsonNode sourceJsonWithMajorVersion(ObjectMapper objectMapper,
+    static JsonNode sourceJsonWithMajorVersion(JsonMapper jsonMapper,
             String id, String bpId, String dataFieldName, String dataFieldValue,
             int majorVersion) {
-        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode root = jsonMapper.createObjectNode();
         ObjectNode originNode = root.putObject("origin");
         originNode.put("id", id);
         originNode.put("version", "1");

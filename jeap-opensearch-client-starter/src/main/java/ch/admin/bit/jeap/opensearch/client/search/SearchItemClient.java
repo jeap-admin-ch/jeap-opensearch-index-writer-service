@@ -1,18 +1,12 @@
 package ch.admin.bit.jeap.opensearch.client.search;
 
-import ch.admin.bit.jeap.opensearch.client.auth.Authorization;
-import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAccessDeniedException;
-import ch.admin.bit.jeap.opensearch.client.auth.IndexTypeAuthorization;
-import ch.admin.bit.jeap.opensearch.client.auth.SearchItemAuthorization;
-import ch.admin.bit.jeap.opensearch.client.auth.UserSearchItemAuthorization;
+import ch.admin.bit.jeap.opensearch.client.auth.*;
 import ch.admin.bit.jeap.opensearch.client.domain.SearchItemTyped;
 import ch.admin.bit.jeap.opensearch.client.domain.SearchItemView;
 import ch.admin.bit.jeap.opensearch.client.filter.OriginFilter;
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indextype.Origin;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
@@ -21,14 +15,11 @@ import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.search.Hit;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 
 /**
@@ -60,7 +51,7 @@ import java.util.function.Consumer;
 public class SearchItemClient {
 
     private final OpenSearchClient openSearchClient;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
     private final IndexTypeAuthorization indexTypeAuthorization;
     private final SearchItemAuthorization searchItemAuthorization;
     private final UserSearchItemAuthorization userSearchItemAuthorization;
@@ -222,10 +213,10 @@ public class SearchItemClient {
             return Optional.empty();
         }
         try {
-            Origin origin = objectMapper.treeToValue(src.path("origin"), Origin.class);
-            T data = objectMapper.treeToValue(src.path("data"), indexType.dataClass());
+            Origin origin = jsonMapper.treeToValue(src.path("origin"), Origin.class);
+            T data = jsonMapper.treeToValue(src.path("data"), indexType.dataClass());
             return Optional.of(new SearchItemTyped<>(origin, data, indexType));
-        } catch (JsonProcessingException | IllegalArgumentException e) {
+        } catch (JacksonException | IllegalArgumentException e) {
             throw new SearchItemClientException(
                     "Failed to deserialize search item of index type '" + indexType.getClass().getSimpleName()
                             + "' (document id '" + hit.id() + "').", e);
