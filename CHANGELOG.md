@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-06-15
+
+### Changed
+
+- update parent from 35.4.0 to 35.6.0
+
+### Fixed
+
+- Mapping updates on startup now target only the designated physical write index (isWriteIndex=true) instead of all physical indices backing the write alias (omit disk flood-stage watermark)
+- disable FAIL_ON_TRAILING_TOKENS to omit exceptions
+
 ## [0.18.0] - 2026-06-11
 
 ### Changed

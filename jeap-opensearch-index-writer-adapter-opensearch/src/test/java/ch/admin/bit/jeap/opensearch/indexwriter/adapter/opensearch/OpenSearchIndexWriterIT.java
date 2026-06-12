@@ -287,6 +287,29 @@ class OpenSearchIndexWriterIT {
         assertThat(documentExists(docId)).isFalse();
     }
 
+    @Test
+    void ensureIndexReady_logsWarningAndDoesNotThrow_whenIndexHasReadOnlyAllowDeleteBlock() throws Exception {
+        String blockedPhysicalIndex = "orders_v1-blocked-000001";
+        String blockedWriteAlias = "orders_v1_blocked_write";
+        String blockedReadAlias = "orders_v1_blocked_read";
+
+        client.indices().create(new CreateIndexRequest.Builder().index(blockedPhysicalIndex).build());
+        client.indices().putAlias(new PutAliasRequest.Builder()
+                .index(blockedPhysicalIndex)
+                .name(blockedWriteAlias)
+                .build());
+        try {
+            // Simulate disk flood-stage watermark: put index in read-only-allow-delete mode
+            httpPut(openSearchUrl + "/" + blockedPhysicalIndex + "/_settings",
+                    "{\"index.blocks.read_only_allow_delete\": true}");
+
+            assertThatNoException().isThrownBy(() ->
+                    indexWriter.ensureIndexReady(blockedWriteAlias, blockedReadAlias, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream));
+        } finally {
+            client.indices().delete(new DeleteIndexRequest.Builder().index(blockedPhysicalIndex).build());
+        }
+    }
+
     private boolean documentExists(String docId) throws IOException {
         BooleanResponse response = client.exists(
                 new ExistsRequest.Builder().index(PHYSICAL_INDEX).id(docId).build());
@@ -300,6 +323,15 @@ class OpenSearchIndexWriterIT {
     private static String httpGet(String url) throws Exception {
         HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    private static void httpPut(String url, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private static String prettyJson(String json) throws Exception {

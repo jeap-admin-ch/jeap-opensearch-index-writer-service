@@ -16,6 +16,11 @@ class OpenSearchIndexWriterException extends IndexWriterException {
         return new OpenSearchIndexWriterException("Write alias '%s' does not exist — ensure the index has been created by IaC before starting the service".formatted(indexWriteAlias), false);
     }
 
+    static OpenSearchIndexWriterException ambiguousWriteIndex(String indexWriteAlias, java.util.Set<String> physicalIndices) {
+        return new OpenSearchIndexWriterException(
+                "Cannot determine physical write index for alias '%s': multiple indices %s found but none has isWriteIndex=true".formatted(indexWriteAlias, physicalIndices), false);
+    }
+
     static OpenSearchIndexWriterException ensureIndexReadyFailed(String indexWriteAlias, Throwable cause) {
         return new OpenSearchIndexWriterException("Failed to ensure index is ready for alias '%s'".formatted(indexWriteAlias), false, cause);
     }

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration(before = AdapterOpenSearchConfiguration.class)
@@ -24,6 +25,9 @@ public class AdapterOpenSearchAwsConfiguration {
     @Bean
     @ConditionalOnMissingBean
     OpenSearchClient openSearchClient(AdapterOpenSearchProperties properties, JsonMapper jsonMapper) {
+        JsonMapper openSearchMapper = jsonMapper.rebuild()
+                .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .build();
         var httpClient = UrlConnectionHttpClient.builder().build();
         return new OpenSearchClient(
                 new AwsSdk2Transport(
@@ -33,7 +37,7 @@ public class AdapterOpenSearchAwsConfiguration {
                         Region.of(properties.getSigningRegion()),
                         AwsSdk2TransportOptions.builder()
                                 .setCredentials(DefaultCredentialsProvider.builder().build())
-                                .setMapper(new JacksonJsonpMapper(jsonMapper))
+                                .setMapper(new JacksonJsonpMapper(openSearchMapper))
                                 .build()
                 )
         );

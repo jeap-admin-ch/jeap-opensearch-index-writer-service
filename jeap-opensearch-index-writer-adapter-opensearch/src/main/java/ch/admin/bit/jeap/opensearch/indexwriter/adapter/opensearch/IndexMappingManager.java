@@ -10,6 +10,7 @@ import org.opensearch.client.json.JsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
+import org.opensearch.client.opensearch.indices.AliasDefinition;
 import org.opensearch.client.opensearch.indices.GetAliasRequest;
 import org.opensearch.client.opensearch.indices.GetAliasResponse;
 import org.opensearch.client.opensearch.indices.GetMappingRequest;
@@ -95,16 +96,53 @@ class IndexMappingManager {
             }
             throw e;
         }
-        Set<String> physicalIndices = aliasResponse.result().keySet();
-        for (String physicalIndex : physicalIndices) {
-            ensureRolloverAlias(physicalIndex, indexWriteAlias);
-            if (isMappingUpToDate(physicalIndex, minorVersion)) {
-                log.debug("Mapping for index '{}' is already up-to-date at version {}", physicalIndex, minorVersion);
+        String physicalWriteIndex = resolvePhysicalWriteIndex(aliasResponse, indexWriteAlias);
+        try {
+            ensureRolloverAlias(physicalWriteIndex, indexWriteAlias);
+            if (isMappingUpToDate(physicalWriteIndex, minorVersion)) {
+                log.debug("Mapping for index '{}' is already up-to-date at version {}", physicalWriteIndex, minorVersion);
             } else {
-                log.info("Updating mapping for index '{}' to version {}", physicalIndex, minorVersion);
-                updateMapping(physicalIndex, typeMapping);
+                log.info("Updating mapping for index '{}' to version {}", physicalWriteIndex, minorVersion);
+                updateMapping(physicalWriteIndex, typeMapping);
+            }
+        } catch (OpenSearchException e) {
+            if ("cluster_block_exception".equals(e.response().error().type())) {
+                logClusterBlockWarning(physicalWriteIndex, indexWriteAlias, e.response().error().reason());
+            } else {
+                throw e;
+            }
+        } catch (IOException e) {
+            // The HTTP transport (ApacheHttpClient5Transport) can surface cluster_block_exception as
+            // ResponseException (a subtype of IOException) rather than OpenSearchException.
+            if (e.getMessage() != null && e.getMessage().contains("cluster_block_exception")) {
+                logClusterBlockWarning(physicalWriteIndex, indexWriteAlias, e.getMessage());
+            } else {
+                throw e;
             }
         }
+    }
+
+    private void logClusterBlockWarning(String physicalIndex, String writeAlias, String detail) {
+        log.warn("Skipping mapping update for index '{}' (alias '{}') — index is blocked: {}. " +
+                 "The mapping will be updated on the next startup once the block is removed.",
+                physicalIndex, writeAlias, detail);
+    }
+
+    private String resolvePhysicalWriteIndex(GetAliasResponse aliasResponse, String indexWriteAlias) {
+        return aliasResponse.result().entrySet().stream()
+                .filter(e -> {
+                    AliasDefinition def = e.getValue().aliases().get(indexWriteAlias);
+                    return def != null && Boolean.TRUE.equals(def.isWriteIndex());
+                })
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseGet(() -> {
+                    Set<String> allIndices = aliasResponse.result().keySet();
+                    if (allIndices.size() != 1) {
+                        throw OpenSearchIndexWriterException.ambiguousWriteIndex(indexWriteAlias, allIndices);
+                    }
+                    return allIndices.iterator().next();
+                });
     }
 
     private void ensureRolloverAlias(String physicalIndex, String writeAlias) throws IOException {

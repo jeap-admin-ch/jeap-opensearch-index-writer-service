@@ -150,7 +150,6 @@ Apache License Version 2.0
  * Byte Buddy (without dependencies) - [net.bytebuddy:byte-buddy](https://bytebuddy.net/byte-buddy)
  * Byte Buddy agent - [net.bytebuddy:byte-buddy-agent](https://bytebuddy.net/byte-buddy-agent)
  * Java Native Access - [net.java.dev.jna:jna](https://github.com/java-native-access/jna)
- * Logstash Logback Encoder - [net.logstash.logback:logstash-logback-encoder](https://github.com/logstash/logstash-logback-encoder)
  * Logstash Logback Encoder - [net.logstash.logback:logstash-logback-encoder](https://github.com/logfellow/logstash-logback-encoder)
  * ASM based accessors helper used by json-smart - [net.minidev:accessors-smart](https://urielch.github.io/)
  * JSON Small and Fast Parser - [net.minidev:json-smart](https://urielch.github.io/)
@@ -407,6 +406,12 @@ Bouncy Castle Licence
 
  * Bouncy Castle Provider - [org.bouncycastle:bcprov-jdk18on](https://www.bouncycastle.org/download/bouncy-castle-java/)
 
+EPL-2.0
+-------------------------------
+
+ * Logback Classic Module - [ch.qos.logback:logback-classic](http://logback.qos.ch/logback-classic)
+ * Logback Core Module - [ch.qos.logback:logback-core](http://logback.qos.ch/logback-core)
+
 Eclipse Distribution License - v 1.0
 -------------------------------
 
@@ -418,14 +423,12 @@ Eclipse Public License 2.0
 -------------------------------
 
  * Jakarta JSON Processing API - [jakarta.json:jakarta.json-api](https://github.com/eclipse-ee4j/jsonp)
- * JSON-B API - [jakarta.json.bind:jakarta.json.bind-api](https://jakartaee.github.io/jsonb-api)
+ * Jakarta JSON Binding API - [jakarta.json.bind:jakarta.json.bind-api](https://projects.eclipse.org/projects/ee4j.jsonb/jakarta.json.bind-api)
  * Eclipse Parsson - [org.eclipse.parsson:parsson](https://github.com/eclipse-ee4j/parsson/parsson)
 
 Eclipse Public License v2.0
 -------------------------------
 
- * Logback Classic Module - [ch.qos.logback:logback-classic](http://logback.qos.ch/logback-classic)
- * Logback Core Module - [ch.qos.logback:logback-core](http://logback.qos.ch/logback-core)
  * Jakarta Annotations API - [jakarta.annotation:jakarta.annotation-api](https://projects.eclipse.org/projects/ee4j.ca)
  * Jakarta Servlet - [jakarta.servlet:jakarta.servlet-api](https://projects.eclipse.org/projects/ee4j.servlet)
  * AspectJ Weaver - [org.aspectj:aspectjweaver](https://www.eclipse.org/aspectj/)
@@ -460,14 +463,8 @@ GNU General Public License, version 2 with the GNU Classpath Exception
 -------------------------------
 
  * Jakarta JSON Processing API - [jakarta.json:jakarta.json-api](https://github.com/eclipse-ee4j/jsonp)
- * JSON-B API - [jakarta.json.bind:jakarta.json.bind-api](https://jakartaee.github.io/jsonb-api)
+ * Jakarta JSON Binding API - [jakarta.json.bind:jakarta.json.bind-api](https://projects.eclipse.org/projects/ee4j.jsonb/jakarta.json.bind-api)
  * Eclipse Parsson - [org.eclipse.parsson:parsson](https://github.com/eclipse-ee4j/parsson/parsson)
-
-GNU Lesser General Public License
--------------------------------
-
- * Logback Classic Module - [ch.qos.logback:logback-classic](http://logback.qos.ch/logback-classic)
- * Logback Core Module - [ch.qos.logback:logback-core](http://logback.qos.ch/logback-core)
 
 Go License
 -------------------------------
@@ -480,6 +477,12 @@ LGPL 2.1
 
  * Javassist - [org.javassist:javassist](http://www.javassist.org/)
 
+LGPL-2.1-only
+-------------------------------
+
+ * Logback Classic Module - [ch.qos.logback:logback-classic](http://logback.qos.ch/logback-classic)
+ * Logback Core Module - [ch.qos.logback:logback-core](http://logback.qos.ch/logback-core)
+
 LGPL-2.1-or-later
 -------------------------------
 
@@ -490,7 +493,6 @@ MIT License
 
  * minimal-json - [com.eclipsesource.minimal-json:minimal-json](https://github.com/ralfstx/minimal-json)
  * ClassGraph - [io.github.classgraph:classgraph](https://github.com/classgraph/classgraph)
- * Logstash Logback Encoder - [net.logstash.logback:logstash-logback-encoder](https://github.com/logstash/logstash-logback-encoder)
  * Logstash Logback Encoder - [net.logstash.logback:logstash-logback-encoder](https://github.com/logfellow/logstash-logback-encoder)
  * JOpt Simple - [net.sf.jopt-simple:jopt-simple](http://jopt-simple.github.io/jopt-simple)
  * argparse4j - [net.sourceforge.argparse4j:argparse4j](http://argparse4j.github.io)

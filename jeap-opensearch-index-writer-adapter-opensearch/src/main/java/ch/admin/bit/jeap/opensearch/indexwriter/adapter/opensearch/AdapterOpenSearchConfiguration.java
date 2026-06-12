@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
@@ -26,9 +27,12 @@ public class AdapterOpenSearchConfiguration {
     @ConditionalOnMissingBean
     OpenSearchClient openSearchClient(AdapterOpenSearchProperties properties, JsonMapper jsonMapper) {
         try {
+            JsonMapper openSearchMapper = jsonMapper.rebuild()
+                    .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .build();
             var transport = ApacheHttpClient5TransportBuilder
                     .builder(HttpHost.create(properties.getUrl()))
-                    .setMapper(new JacksonJsonpMapper(jsonMapper))
+                    .setMapper(new JacksonJsonpMapper(openSearchMapper))
                     .build();
             return new OpenSearchClient(transport);
         } catch (java.net.URISyntaxException e) {

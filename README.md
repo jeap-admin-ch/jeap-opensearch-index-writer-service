@@ -83,11 +83,12 @@ The template is only written when it does not yet exist **or** when its stored v
 
 ### 2. Index Mapping on existing physical indices
 
-After updating the template, the service resolves all physical indices currently pointed to by the write alias and checks the `_meta.schema_version` stored in each index's mapping.
+After updating the template, the service resolves the physical write index pointed to by the write alias and checks the `_meta.schema_version` stored in its mapping. The write index is identified by the `is_write_index: true` flag on the alias; if no index carries that flag (e.g. older setups with a single physical index), the single physical index is used.
 
 - If the version **matches** the current minor version, the index is left untouched.
 - If the version **differs**, the service pushes the updated mapping to that index via `PUT /{physicalIndex}/_mapping`.
 - If the write alias **does not exist yet**, startup fails with a clear error — the physical index and its aliases must be created by IaC before the service can start.
+- If OpenSearch returns a `cluster_block_exception` (e.g. the disk flood-stage watermark has been exceeded and the index has a `read-only-allow-delete` block), the service **logs a warning and continues** — startup is not aborted. The mapping update will be applied automatically on the next startup once the block is removed.
 
 ## Installing / Getting started
 
