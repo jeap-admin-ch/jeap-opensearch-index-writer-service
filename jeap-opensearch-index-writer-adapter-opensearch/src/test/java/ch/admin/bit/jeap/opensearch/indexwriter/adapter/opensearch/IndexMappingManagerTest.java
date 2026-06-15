@@ -23,8 +23,6 @@ import org.opensearch.client.opensearch.indices.GetAliasResponse;
 import org.opensearch.client.opensearch.indices.GetMappingRequest;
 import org.opensearch.client.opensearch.indices.GetMappingResponse;
 import org.opensearch.client.opensearch.indices.OpenSearchIndicesClient;
-import org.opensearch.client.opensearch.indices.PutIndicesSettingsRequest;
-import org.opensearch.client.opensearch.indices.PutIndicesSettingsResponse;
 import org.opensearch.client.opensearch.indices.PutMappingRequest;
 import org.opensearch.client.opensearch.indices.PutMappingResponse;
 import org.opensearch.client.opensearch.indices.get_alias.IndexAliases;
@@ -50,8 +48,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class IndexMappingManagerTest {
 
-    private static final String INDEX_WRITE_ALIAS = "orders_V1_write";
-    private static final String PHYSICAL_INDEX = "orders_v1_write-000001";
+    private static final String INDEX_WRITE_ALIAS = "orders_v1_write";
+    private static final String PHYSICAL_INDEX = "orders_v1-000001";
     private static final int MINOR_VERSION = 3;
     private static final String MAPPING_JSON = """
             {
@@ -107,36 +105,16 @@ class IndexMappingManagerTest {
     // --- ensureMappingUpToDate ---
 
     @Test
-    void ensureMappingUpToDate_throwsException_whenAliasDoesNotExist() throws IOException {
-        when(openSearchClient.indices()).thenReturn(indicesClient);
-        when(indicesClient.getAlias(any(GetAliasRequest.class)))
-                .thenThrow(new OpenSearchException(ErrorResponse.of(r -> r
-                        .status(404)
-                        .error(e -> e.type("alias_missing_exception").reason("no such alias")))));
-
-        TypeMapping mapping = mock(TypeMapping.class);
-        assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, mapping))
-                .isInstanceOf(OpenSearchIndexWriterException.class)
-                .hasMessageContaining(INDEX_WRITE_ALIAS);
-
-        verify(indicesClient, never()).putMapping(any(PutMappingRequest.class));
-    }
-
-    @Test
     void ensureMappingUpToDate_updatesMapping_whenSchemaVersionIsOutdated() throws IOException {
         setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenReturn(mock(PutIndicesSettingsResponse.class));
 
         TypeMapping outdatedMapping = TypeMapping.of(t -> t
                 .dynamic(DynamicMapping.False)
                 .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of("1")));
         setupMappingForIndex(PHYSICAL_INDEX, outdatedMapping);
-
-        when(indicesClient.putMapping(any(PutMappingRequest.class)))
-                .thenReturn(mock(PutMappingResponse.class));
+        when(indicesClient.putMapping(any(PutMappingRequest.class))).thenReturn(mock(PutMappingResponse.class));
 
         indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, outdatedMapping);
 
@@ -148,8 +126,6 @@ class IndexMappingManagerTest {
         setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenReturn(mock(PutIndicesSettingsResponse.class));
 
         TypeMapping currentMapping = TypeMapping.of(t -> t
                 .dynamic(DynamicMapping.False)
@@ -159,24 +135,6 @@ class IndexMappingManagerTest {
         indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, currentMapping);
 
         verify(indicesClient, never()).putMapping(any(PutMappingRequest.class));
-    }
-
-    @Test
-    void ensureMappingUpToDate_setsRolloverAlias_onPhysicalIndex() throws IOException {
-        setupTransportWithMapper();
-        when(openSearchClient.indices()).thenReturn(indicesClient);
-        setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-
-        TypeMapping currentMapping = TypeMapping.of(t -> t
-                .dynamic(DynamicMapping.False)
-                .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of(String.valueOf(MINOR_VERSION))));
-        setupMappingForIndex(PHYSICAL_INDEX, currentMapping);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenReturn(mock(PutIndicesSettingsResponse.class));
-
-        indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, currentMapping);
-
-        verify(indicesClient).putSettings(any(PutIndicesSettingsRequest.class));
     }
 
     // --- resolvePhysicalWriteIndex ---
@@ -200,18 +158,32 @@ class IndexMappingManagerTest {
         when(aliasResponse.result()).thenReturn(Map.of(writeIndex, writeIndexAliases, oldIndex, oldIndexAliases));
         when(indicesClient.getAlias(any(GetAliasRequest.class))).thenReturn(aliasResponse);
 
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenReturn(mock(PutIndicesSettingsResponse.class));
-
         TypeMapping currentMapping = TypeMapping.of(t -> t
                 .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of(String.valueOf(MINOR_VERSION))));
         setupMappingForIndex(writeIndex, currentMapping);
 
         indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, currentMapping);
 
-        // putSettings called exactly once — only for the designated write index, not the old one
-        verify(indicesClient).putSettings(any(PutIndicesSettingsRequest.class));
         verify(indicesClient, never()).putMapping(any(PutMappingRequest.class));
+    }
+
+    @Test
+    void ensureMappingUpToDate_throwsException_whenSingleIndexHasWriteIndexExplicitlyFalse() throws IOException {
+        when(openSearchClient.indices()).thenReturn(indicesClient);
+
+        IndexAliases indexAliases = mock(IndexAliases.class);
+        when(indexAliases.aliases()).thenReturn(
+                Map.of(INDEX_WRITE_ALIAS, AliasDefinition.of(a -> a.isWriteIndex(false))));
+        GetAliasResponse aliasResponse = mock(GetAliasResponse.class);
+        when(aliasResponse.result()).thenReturn(Map.of(PHYSICAL_INDEX, indexAliases));
+        when(indicesClient.getAlias(any(GetAliasRequest.class))).thenReturn(aliasResponse);
+
+        TypeMapping mapping = mock(TypeMapping.class);
+        assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, mapping))
+                .isInstanceOf(OpenSearchIndexWriterException.class)
+                .hasMessageContaining(INDEX_WRITE_ALIAS)
+                .hasMessageContaining(PHYSICAL_INDEX)
+                .hasMessageContaining("is_write_index=false");
     }
 
     @Test
@@ -234,11 +206,10 @@ class IndexMappingManagerTest {
     // --- cluster_block_exception handling ---
 
     @Test
-    void ensureMappingUpToDate_logsWarningAndDoesNotThrow_whenClusterBlockExceptionOnPutSettings() throws IOException {
+    void ensureMappingUpToDate_logsWarningAndDoesNotThrow_whenClusterBlockExceptionOnGetMapping() throws IOException {
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenThrow(clusterBlockException());
+        when(indicesClient.getMapping(any(GetMappingRequest.class))).thenThrow(clusterBlockException());
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
         TypeMapping mapping = mock(TypeMapping.class);
@@ -261,14 +232,11 @@ class IndexMappingManagerTest {
         setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenReturn(mock(PutIndicesSettingsResponse.class));
 
         TypeMapping outdatedMapping = TypeMapping.of(t -> t
                 .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of("0")));
         setupMappingForIndex(PHYSICAL_INDEX, outdatedMapping);
-        when(indicesClient.putMapping(any(PutMappingRequest.class)))
-                .thenThrow(clusterBlockException());
+        when(indicesClient.putMapping(any(PutMappingRequest.class))).thenThrow(clusterBlockException());
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
 
@@ -288,16 +256,20 @@ class IndexMappingManagerTest {
     void ensureMappingUpToDate_logsWarningAndDoesNotThrow_whenClusterBlockExceptionSurfacedAsIOException() throws IOException {
         // The HTTP transport (ApacheHttpClient5Transport) can throw ResponseException (an IOException)
         // instead of OpenSearchException for cluster_block errors.
+        setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
+
+        TypeMapping outdatedMapping = TypeMapping.of(t -> t
+                .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of("0")));
+        setupMappingForIndex(PHYSICAL_INDEX, outdatedMapping);
+        when(indicesClient.putMapping(any(PutMappingRequest.class)))
                 .thenThrow(new IOException("cluster_block_exception: index has read-only-allow-delete block"));
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
-        TypeMapping mapping = mock(TypeMapping.class);
 
         assertThatNoException().isThrownBy(() ->
-                indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, mapping));
+                indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, outdatedMapping));
 
         assertThat(logs.list)
                 .anySatisfy(event -> {
@@ -310,27 +282,35 @@ class IndexMappingManagerTest {
 
     @Test
     void ensureMappingUpToDate_propagatesNonClusterBlockOpenSearchExceptions() throws IOException {
+        setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
-                .thenThrow(securityException());
+
+        TypeMapping outdatedMapping = TypeMapping.of(t -> t
+                .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of("0")));
+        setupMappingForIndex(PHYSICAL_INDEX, outdatedMapping);
+        when(indicesClient.putMapping(any(PutMappingRequest.class))).thenThrow(securityException());
 
         TypeMapping mapping = mock(TypeMapping.class);
-        assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, mapping))
+        assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, outdatedMapping))
                 .isInstanceOf(OpenSearchException.class);
     }
 
     @Test
     void ensureMappingUpToDate_propagatesNonClusterBlockIOExceptions() throws IOException {
+        setupTransportWithMapper();
         when(openSearchClient.indices()).thenReturn(indicesClient);
         setupAliasWithPhysicalIndex(PHYSICAL_INDEX);
-        when(indicesClient.putSettings(any(PutIndicesSettingsRequest.class)))
+
+        TypeMapping outdatedMapping = TypeMapping.of(t -> t
+                .meta(IndexMappingManager.SCHEMA_VERSION_META_KEY, JsonData.of("0")));
+        setupMappingForIndex(PHYSICAL_INDEX, outdatedMapping);
+        when(indicesClient.putMapping(any(PutMappingRequest.class)))
                 .thenThrow(new IOException("connection refused"));
 
-        TypeMapping mapping = mock(TypeMapping.class);
-        assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, mapping))
-                .isInstanceOf(IOException.class)
-                .hasMessageContaining("connection refused");
+        assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, outdatedMapping))
+                .isInstanceOf(OpenSearchIndexWriterException.class)
+                .cause().isInstanceOf(IOException.class).hasMessageContaining("connection refused");
     }
 
     // --- helpers ---

@@ -2,27 +2,27 @@
   "messages": [
     {
       "messageName": "PreziusRegistrationCreated",
-      "topicName": "ch.admin.bit.prezius.registration-created",
+      "topicName": "ch.admin.bit.precious.registration-created",
       "operations": [
         {
           "indexType": "PreziusRegistration",
           "indexOperation": "UPSERT",
-          "uri": "https://prezius/api/v1/registrations/{id}",
-          "referenceProvider": "ch.admin.bit.prezius.PreziusRegistrationReferenceProvider",
-          "condition": "ch.admin.bit.prezius.PreziusRegistrationIsActiveCondition",
+          "uri": "https://precious/api/v1/registrations/{id}",
+          "referenceProvider": "ch.admin.bit.precious.PreziusRegistrationReferenceProvider",
+          "condition": "ch.admin.bit.precious.PreziusRegistrationIsActiveCondition",
           "featureFlag": "PREZIUS_REGISTRATION_INDEXING"
         }
       ]
     },
     {
       "messageName": "PreziusRegistrationDeleted",
-      "topicName": "ch.admin.bit.prezius.registration-deleted",
+      "topicName": "ch.admin.bit.precious.registration-deleted",
       "operations": [
         {
           "indexType": "PreziusRegistration",
           "indexOperation": "delete",
-          "uri": "https://prezius/api/v1/registrations/{id}",
-          "referenceProvider": "ch.admin.bit.prezius.PreziusRegistrationReferenceProvider"
+          "uri": "https://precious/api/v1/registrations/{id}",
+          "referenceProvider": "ch.admin.bit.precious.PreziusRegistrationReferenceProvider"
         }
       ]
     }

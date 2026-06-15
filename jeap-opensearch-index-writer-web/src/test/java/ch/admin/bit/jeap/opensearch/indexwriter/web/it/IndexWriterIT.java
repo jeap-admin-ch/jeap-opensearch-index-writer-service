@@ -8,7 +8,6 @@ import ch.admin.bit.jme.declaration.DeclarationReferences;
 import ch.admin.bit.jme.declaration.JmeDeclarationCreatedEvent;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -17,8 +16,7 @@ import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.ExistsRequest;
 import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.IndexRequest;
-import org.opensearch.client.opensearch.indices.CreateIndexRequest;
-import org.opensearch.client.opensearch.indices.PutAliasRequest;
+import org.opensearch.client.opensearch.indices.Alias;
 import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
 import org.apache.hc.core5.http.HttpHost;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,9 +61,12 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
     private static final String TRUE_CONDITION_INDEX_WRITE_ALIAS = "test_document_true_condition_v1_write";
     private static final String FALSE_CONDITION_INDEX_WRITE_ALIAS = "test_document_false_condition_v1_write";
     private static final String FEATURE_FLAG_INDEX_WRITE_ALIAS = "test_document_feature_flag_v1_write";
-    private static final List<String> ALL_WRITE_ALIASES = List.of(
-            INDEX_WRITE_ALIAS, DELETE_INDEX_WRITE_ALIAS, TRUE_CONDITION_INDEX_WRITE_ALIAS,
-            FALSE_CONDITION_INDEX_WRITE_ALIAS, FEATURE_FLAG_INDEX_WRITE_ALIAS);
+    private static final Map<String, String> WRITE_TO_READ_ALIAS = Map.of(
+            INDEX_WRITE_ALIAS, "test_document_read",
+            DELETE_INDEX_WRITE_ALIAS, "test_document_delete_read",
+            TRUE_CONDITION_INDEX_WRITE_ALIAS, "test_document_true_condition_read",
+            FALSE_CONDITION_INDEX_WRITE_ALIAS, "test_document_false_condition_read",
+            FEATURE_FLAG_INDEX_WRITE_ALIAS, "test_document_feature_flag_read");
     private static final NamedFeature IT_FEATURE_FLAG = new NamedFeature("IT_FEATURE_FLAG_INDEXING");
 
     @Container
@@ -95,6 +96,29 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         registry.add("spring.security.oauth2.client.provider.search-item-provider.token-uri",
                 () -> wireMock.baseUrl() + "/oauth/token");
         registry.add("test.wiremock.base-url", wireMock::baseUrl);
+        createIaCTemplates();
+    }
+
+    // Runs before Spring context starts (called from @DynamicPropertySource), so IndexMappingUpdater
+    // finds the templates on startup just like it would in production after IaC has run.
+    private static void createIaCTemplates() {
+        var transport = ApacheHttpClient5TransportBuilder
+                .builder(new HttpHost("http", OPENSEARCH.getHost(), OPENSEARCH.getMappedPort(9200)))
+                .build();
+        plainOpenSearchClient = new OpenSearchClient(transport);
+        WRITE_TO_READ_ALIAS.forEach((writeAlias, readAlias) -> {
+            String templateName = writeAlias.endsWith("_write")
+                    ? writeAlias.substring(0, writeAlias.length() - "_write".length())
+                    : writeAlias;
+            try {
+                plainOpenSearchClient.indices().putIndexTemplate(r -> r
+                        .name(templateName)
+                        .indexPatterns(List.of(templateName + "-*"))
+                        .template(t -> t.aliases(Map.of(readAlias, new Alias.Builder().build()))));
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create IaC template for " + writeAlias, e);
+            }
+        });
     }
 
     @Autowired
@@ -108,24 +132,6 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
 
     @Autowired
     private KafkaListenerEndpointRegistry listenerEndpointRegistry;
-
-    @BeforeAll
-    static void createOpenSearchIndices() throws Exception {
-        String url = "http://" + OPENSEARCH.getHost() + ":" + OPENSEARCH.getMappedPort(9200);
-        var transport = ApacheHttpClient5TransportBuilder
-                .builder(HttpHost.create(url))
-                .build();
-        plainOpenSearchClient = new OpenSearchClient(transport);
-        for (String alias : ALL_WRITE_ALIASES) {
-            String base = alias.toLowerCase();
-            String physicalIndex = (base.endsWith("_write") ? base.substring(0, base.length() - "_write".length()) : base) + "-000001";
-            plainOpenSearchClient.indices().create(new CreateIndexRequest.Builder().index(physicalIndex).build());
-            plainOpenSearchClient.indices().putAlias(new PutAliasRequest.Builder()
-                    .index(physicalIndex)
-                    .name(alias)
-                    .build());
-        }
-    }
 
     @BeforeEach
     void setUp() throws IOException {

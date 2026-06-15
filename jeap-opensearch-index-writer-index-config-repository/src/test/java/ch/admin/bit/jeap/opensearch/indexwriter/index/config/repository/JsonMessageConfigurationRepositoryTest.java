@@ -40,9 +40,9 @@ class JsonMessageConfigurationRepositoryTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        when(indexingConditionRepository.getIndexingCondition("ch.admin.bit.prezius.PreziusRegistrationIsActiveCondition"))
+        when(indexingConditionRepository.getIndexingCondition("ch.admin.bit.precious.PreziusRegistrationIsActiveCondition"))
                 .thenReturn(registrationIsActiveCondition);
-        when(referenceProviderRepository.getReferenceProvider(any(), eq("ch.admin.bit.prezius.PreziusRegistrationReferenceProvider")))
+        when(referenceProviderRepository.getReferenceProvider(any(), eq("ch.admin.bit.precious.PreziusRegistrationReferenceProvider")))
                 .thenReturn(registrationReferenceProvider);
 
         repository = new JsonMessageConfigurationRepository(indexingConditionRepository, referenceProviderRepository, new StandardEnvironment(),
@@ -65,12 +65,12 @@ class JsonMessageConfigurationRepositoryTest {
 
         assertThat(result).isPresent();
         MessageConfig config = result.get();
-        assertThat(config.topicName()).isEqualTo("ch.admin.bit.prezius.registration-created");
+        assertThat(config.topicName()).isEqualTo("ch.admin.bit.precious.registration-created");
         assertThat(config.operations()).hasSize(1);
         MessageOperationConfig op = config.operations().getFirst();
         assertThat(op.indexType()).isEqualTo("PreziusRegistration");
         assertThat(op.indexOperation()).isEqualTo(IndexOperation.UPSERT);
-        assertThat(op.uri()).isEqualTo("https://prezius/api/v1/registrations/{id}");
+        assertThat(op.uri()).isEqualTo("https://precious/api/v1/registrations/{id}");
         assertThat(op.referenceProvider()).isSameAs(registrationReferenceProvider);
         assertThat(op.condition()).isSameAs(registrationIsActiveCondition);
         assertThat(op.featureFlag()).isEqualTo("PREZIUS_REGISTRATION_INDEXING");

@@ -12,13 +12,37 @@ class OpenSearchIndexWriterException extends IndexWriterException {
         super(message, retryable);
     }
 
-    static OpenSearchIndexWriterException writeAliasNotFound(String indexWriteAlias) {
-        return new OpenSearchIndexWriterException("Write alias '%s' does not exist — ensure the index has been created by IaC before starting the service".formatted(indexWriteAlias), false);
+    static OpenSearchIndexWriterException indexTemplateNotFound(String indexWriteAlias) {
+        return new OpenSearchIndexWriterException(
+                "Index template for write alias '%s' does not exist — it must be created by IaC before starting the service".formatted(indexWriteAlias), false);
     }
 
     static OpenSearchIndexWriterException ambiguousWriteIndex(String indexWriteAlias, java.util.Set<String> physicalIndices) {
         return new OpenSearchIndexWriterException(
                 "Cannot determine physical write index for alias '%s': multiple indices %s found but none has isWriteIndex=true".formatted(indexWriteAlias, physicalIndices), false);
+    }
+
+    static OpenSearchIndexWriterException writeIndexExplicitlyDisabled(String indexWriteAlias, String physicalIndex) {
+        return new OpenSearchIndexWriterException(
+                ("Index '%s' has is_write_index=false for alias '%s' — likely caused by a failed ISM rollover that left the alias in a broken state. " +
+                 "Fix by running: POST /_aliases {\"actions\":[{\"add\":{\"index\":\"%s\",\"alias\":\"%s\",\"is_write_index\":true}}]}")
+                        .formatted(physicalIndex, indexWriteAlias, physicalIndex, indexWriteAlias), false);
+    }
+
+    static OpenSearchIndexWriterException templateSetupFailed(String indexWriteAlias, Throwable cause) {
+        return new OpenSearchIndexWriterException("Failed to update index template for alias '%s'".formatted(indexWriteAlias), false, cause);
+    }
+
+    static OpenSearchIndexWriterException physicalIndexSetupFailed(String indexWriteAlias, Throwable cause) {
+        return new OpenSearchIndexWriterException("Failed to set up physical index for alias '%s'".formatted(indexWriteAlias), false, cause);
+    }
+
+    static OpenSearchIndexWriterException mappingParseFailed(String indexWriteAlias, Throwable cause) {
+        return new OpenSearchIndexWriterException("Failed to parse mapping for alias '%s'".formatted(indexWriteAlias), false, cause);
+    }
+
+    static OpenSearchIndexWriterException mappingUpdateFailed(String indexWriteAlias, Throwable cause) {
+        return new OpenSearchIndexWriterException("Failed to update mapping for alias '%s'".formatted(indexWriteAlias), false, cause);
     }
 
     static OpenSearchIndexWriterException ensureIndexReadyFailed(String indexWriteAlias, Throwable cause) {

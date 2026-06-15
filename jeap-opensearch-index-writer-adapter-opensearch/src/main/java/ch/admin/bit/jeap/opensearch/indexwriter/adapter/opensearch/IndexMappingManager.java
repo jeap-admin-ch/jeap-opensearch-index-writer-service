@@ -15,8 +15,6 @@ import org.opensearch.client.opensearch.indices.GetAliasRequest;
 import org.opensearch.client.opensearch.indices.GetAliasResponse;
 import org.opensearch.client.opensearch.indices.GetMappingRequest;
 import org.opensearch.client.opensearch.indices.GetMappingResponse;
-import org.opensearch.client.opensearch.indices.IndexSettings;
-import org.opensearch.client.opensearch.indices.PutIndicesSettingsRequest;
 import org.opensearch.client.opensearch.indices.PutMappingRequest;
 import org.opensearch.client.opensearch.indices.get_mapping.IndexMappingRecord;
 import org.springframework.stereotype.Component;
@@ -35,15 +33,19 @@ class IndexMappingManager {
     static final String SCHEMA_VERSION_META_KEY = "schema_version";
     private static final String MAPPINGS_JSON_KEY = "mappings";
     private static final String META_JSON_KEY = "_meta";
-    private static final String ISM_ROLLOVER_ALIAS_SETTING = "plugins.index_state_management.rollover_alias";
 
     private final OpenSearchClient openSearchClient;
     private final DataFieldValidator dataFieldValidator;
 
-    TypeMapping parseMappingWithVersion(String indexWriteAlias, InputStream inputStream, int minorVersion) throws IOException {
+    TypeMapping parseMappingWithVersion(String indexWriteAlias, InputStream inputStream, int minorVersion) {
         @SuppressWarnings("resource")
         JsonpMapper jsonpMapper = openSearchClient._transport().jsonpMapper();
-        byte[] bytes = inputStream.readAllBytes();
+        byte[] bytes;
+        try {
+            bytes = inputStream.readAllBytes();
+        } catch (IOException e) {
+            throw OpenSearchIndexWriterException.mappingParseFailed(indexWriteAlias, e);
+        }
         if (bytes.length == 0) {
             throw OpenSearchIndexWriterException.emptyMapping(indexWriteAlias);
         }
@@ -80,7 +82,7 @@ class IndexMappingManager {
         }
     }
 
-    void ensureMappingUpToDate(String indexWriteAlias, int minorVersion, TypeMapping typeMapping) throws IOException {
+    void ensureMappingUpToDate(String indexWriteAlias, int minorVersion, TypeMapping typeMapping) {
         // Specify index="*" so this is resolved as an index-level permission (indices:admin/aliases/get)
         // rather than a cluster-level operation. Without an index, GET /_alias/{name} requires cluster scope.
         GetAliasRequest getAliasRequest = new GetAliasRequest.Builder()
@@ -90,15 +92,11 @@ class IndexMappingManager {
         GetAliasResponse aliasResponse;
         try {
             aliasResponse = openSearchClient.indices().getAlias(getAliasRequest);
-        } catch (OpenSearchException e) {
-            if (e.status() == 404) {
-                throw OpenSearchIndexWriterException.writeAliasNotFound(indexWriteAlias);
-            }
-            throw e;
+        } catch (IOException e) {
+            throw OpenSearchIndexWriterException.mappingUpdateFailed(indexWriteAlias, e);
         }
         String physicalWriteIndex = resolvePhysicalWriteIndex(aliasResponse, indexWriteAlias);
         try {
-            ensureRolloverAlias(physicalWriteIndex, indexWriteAlias);
             if (isMappingUpToDate(physicalWriteIndex, minorVersion)) {
                 log.debug("Mapping for index '{}' is already up-to-date at version {}", physicalWriteIndex, minorVersion);
             } else {
@@ -117,7 +115,7 @@ class IndexMappingManager {
             if (e.getMessage() != null && e.getMessage().contains("cluster_block_exception")) {
                 logClusterBlockWarning(physicalWriteIndex, indexWriteAlias, e.getMessage());
             } else {
-                throw e;
+                throw OpenSearchIndexWriterException.mappingUpdateFailed(indexWriteAlias, e);
             }
         }
     }
@@ -141,18 +139,13 @@ class IndexMappingManager {
                     if (allIndices.size() != 1) {
                         throw OpenSearchIndexWriterException.ambiguousWriteIndex(indexWriteAlias, allIndices);
                     }
-                    return allIndices.iterator().next();
+                    String singleIndex = allIndices.iterator().next();
+                    AliasDefinition def = aliasResponse.result().get(singleIndex).aliases().get(indexWriteAlias);
+                    if (def != null && Boolean.FALSE.equals(def.isWriteIndex())) {
+                        throw OpenSearchIndexWriterException.writeIndexExplicitlyDisabled(indexWriteAlias, singleIndex);
+                    }
+                    return singleIndex;
                 });
-    }
-
-    private void ensureRolloverAlias(String physicalIndex, String writeAlias) throws IOException {
-        PutIndicesSettingsRequest request = new PutIndicesSettingsRequest.Builder()
-                .index(physicalIndex)
-                .settings(IndexSettings.of(s -> s
-                        .customSettings(ISM_ROLLOVER_ALIAS_SETTING, JsonData.of(writeAlias))))
-                .build();
-        openSearchClient.indices().putSettings(request);
-        log.debug("Set ISM rollover alias '{}' on index '{}'", writeAlias, physicalIndex);
     }
 
     private boolean isMappingUpToDate(String indexName, int minorVersion) throws IOException {

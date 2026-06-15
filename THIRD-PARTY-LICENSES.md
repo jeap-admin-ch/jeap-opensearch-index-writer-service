@@ -23,7 +23,7 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-messaging-infrastructure-kafka - [ch.admin.bit.jeap:jeap-messaging-infrastructure-kafka](https://github.com/jeap-admin-ch/jeap-messaging/tree/main/jeap-messaging-infrastructure-kafka)
  * ch.admin.bit.jeap:jeap-messaging-infrastructure-kafka-test - [ch.admin.bit.jeap:jeap-messaging-infrastructure-kafka-test](https://github.com/jeap-admin-ch/jeap-messaging/tree/main/jeap-messaging-infrastructure-kafka-test)
  * ch.admin.bit.jeap:jeap-messaging-model - [ch.admin.bit.jeap:jeap-messaging-model](https://github.com/jeap-admin-ch/jeap-messaging/tree/main/jeap-messaging-model)
- * ch.admin.bit.jeap:jeap-opensearch-index-type - [ch.admin.bit.jeap:jeap-opensearch-index-type](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-type)
+ * ch.admin.bit.jeap:jeap-opensearch-index-type - [ch.admin.bit.jeap:jeap-opensearch-index-type](https://github.com/jeap-admin-ch/jeap-opensearch-index-type/tree/main)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-adapter-kafka - [ch.admin.bit.jeap:jeap-opensearch-index-writer-adapter-kafka](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-adapter-kafka)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-adapter-opensearch - [ch.admin.bit.jeap:jeap-opensearch-index-writer-adapter-opensearch](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-adapter-opensearch)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-adapter-remote-data - [ch.admin.bit.jeap:jeap-opensearch-index-writer-adapter-remote-data](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-adapter-remote-data)
@@ -31,7 +31,6 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-index-config-repository - [ch.admin.bit.jeap:jeap-opensearch-index-writer-index-config-repository](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-index-config-repository)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-index-type-repository - [ch.admin.bit.jeap:jeap-opensearch-index-writer-index-type-repository](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-index-type-repository)
  * ch.admin.bit.jeap:jeap-opensearch-index-writer-web - [ch.admin.bit.jeap:jeap-opensearch-index-writer-web](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-index-writer-web)
- * ch.admin.bit.jeap:jeap-opensearch-searchitem-model - [ch.admin.bit.jeap:jeap-opensearch-searchitem-model](https://github.com/jeap-admin-ch/jeap-opensearch-index-writer-service/tree/main/jeap-opensearch-searchitem-model)
  * ch.admin.bit.jeap:jeap-spring-boot-application-starter - [ch.admin.bit.jeap:jeap-spring-boot-application-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-application-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-config-aws-starter - [ch.admin.bit.jeap:jeap-spring-boot-config-aws-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-config-aws-starter/tree/main/jeap-spring-boot-config-aws-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-featureflag-starter - [ch.admin.bit.jeap:jeap-spring-boot-featureflag-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-featureflag-starter)
@@ -41,7 +40,6 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-spring-boot-roles-anywhere-starter - [ch.admin.bit.jeap:jeap-spring-boot-roles-anywhere-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-roles-anywhere-starter/tree/main/jeap-spring-boot-roles-anywhere-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-security-client-starter - [ch.admin.bit.jeap:jeap-spring-boot-security-client-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-client-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-security-starter - [ch.admin.bit.jeap:jeap-spring-boot-security-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter)
- * ch.admin.bit.jeap:jeap-spring-boot-security-starter-test - [ch.admin.bit.jeap:jeap-spring-boot-security-starter-test](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter-test)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger - [ch.admin.bit.jeap:jeap-spring-boot-swagger](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger-starter - [ch.admin.bit.jeap:jeap-spring-boot-swagger-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger-starter)
  * ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event - [ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event](https://github.com/jeap-admin-ch/jeap-test-message-type-registry/tree/main)
@@ -50,7 +48,6 @@ Apache License Version 2.0
  * AWS Java SDK for AWS STS - [com.amazonaws:aws-java-sdk-sts](https://aws.amazon.com/sdkforjava)
  * JMES Path Query library - [com.amazonaws:jmespath-java](https://aws.amazon.com/sdkforjava)
  * com.dynatrace.hash4j:hash4j - [com.dynatrace.hash4j:hash4j](https://github.com/dynatrace-oss/hash4j)
- * Internet Time Utility - [com.ethlo.time:itu](https://github.com/ethlo/itu)
  * ClassMate - [com.fasterxml:classmate](https://github.com/FasterXML/java-classmate)
  * Jackson-annotations - [com.fasterxml.jackson.core:jackson-annotations](https://github.com/FasterXML/jackson)
  * Jackson-core - [com.fasterxml.jackson.core:jackson-core](https://github.com/FasterXML/jackson-core)
@@ -60,7 +57,6 @@ Apache License Version 2.0
  * Jackson-dataformat-YAML - [com.fasterxml.jackson.dataformat:jackson-dataformat-yaml](https://github.com/FasterXML/jackson-dataformats-text)
  * Jackson datatype: jdk8 - [com.fasterxml.jackson.datatype:jackson-datatype-jdk8](https://github.com/FasterXML/jackson-modules-java8/jackson-datatype-jdk8)
  * Jackson datatype: JSR310 - [com.fasterxml.jackson.datatype:jackson-datatype-jsr310](https://github.com/FasterXML/jackson-modules-java8/jackson-datatype-jsr310)
- * Woodstox - [com.fasterxml.woodstox:woodstox-core](https://github.com/FasterXML/woodstox)
  * Caffeine cache - [com.github.ben-manes.caffeine:caffeine](https://github.com/ben-manes/caffeine)
  * docker-java-api - [com.github.docker-java:docker-java-api](https://github.com/docker-java/docker-java)
  * docker-java-transport - [com.github.docker-java:docker-java-transport](https://github.com/docker-java/docker-java)
@@ -72,16 +68,11 @@ Apache License Version 2.0
  * error-prone annotations - [com.google.errorprone:error_prone_annotations](https://errorprone.info/error_prone_annotations)
  * error-prone annotations - [com.google.errorprone:error_prone_annotations](https://errorprone.info/error_prone_annotations)
  * Guava InternalFutureFailureAccess and InternalFutures - [com.google.guava:failureaccess](https://github.com/google/guava/failureaccess)
- * Guava InternalFutureFailureAccess and InternalFutures - [com.google.guava:failureaccess](https://github.com/google/guava/failureaccess)
- * Guava: Google Core Libraries for Java - [com.google.guava:guava](https://github.com/google/guava)
  * Guava: Google Core Libraries for Java - [com.google.guava:guava](https://github.com/google/guava)
  * Guava ListenableFuture only - [com.google.guava:listenablefuture](https://github.com/google/guava/listenablefuture)
- * Google Guice - Core Library - [com.google.inject:guice](https://github.com/google/guice/guice)
  * J2ObjC Annotations - [com.google.j2objc:j2objc-annotations](https://github.com/google/j2objc/)
  * Jimfs - [com.google.jimfs:jimfs](https://github.com/google/jimfs/jimfs)
- * JavaEWAH - [com.googlecode.javaewah:JavaEWAH](https://github.com/lemire/javaewah)
  * json-path - [com.jayway.jsonpath:json-path](https://github.com/jayway/JsonPath)
- * JsonSchemaValidator - [com.networknt:json-schema-validator](https://github.com/networknt/json-schema-validator)
  * Nimbus Content Type - [com.nimbusds:content-type](https://bitbucket.org/connect2id/nimbus-content-type)
  * Nimbus LangTag - [com.nimbusds:lang-tag](https://bitbucket.org/connect2id/nimbus-language-tags)
  * Nimbus JOSE+JWT - [com.nimbusds:nimbus-jose-jwt](https://bitbucket.org/connect2id/nimbus-jose-jwt)
@@ -145,7 +136,6 @@ Apache License Version 2.0
  * swagger-core-jakarta - [io.swagger.core.v3:swagger-core-jakarta](https://github.com/swagger-api/swagger-core/modules/swagger-core-jakarta)
  * swagger-models-jakarta - [io.swagger.core.v3:swagger-models-jakarta](https://github.com/swagger-api/swagger-core/modules/swagger-models-jakarta)
  * Jakarta Validation API - [jakarta.validation:jakarta.validation-api](https://beanvalidation.org)
- * javax.inject - [javax.inject:javax.inject](http://code.google.com/p/atinject/)
  * Joda-Time - [joda-time:joda-time](https://www.joda.org/joda-time/)
  * Byte Buddy (without dependencies) - [net.bytebuddy:byte-buddy](https://bytebuddy.net/byte-buddy)
  * Byte Buddy agent - [net.bytebuddy:byte-buddy-agent](https://bytebuddy.net/byte-buddy-agent)
@@ -185,30 +175,6 @@ Apache License Version 2.0
  * Apache Log4j API - [org.apache.logging.log4j:log4j-api](https://logging.apache.org/log4j/2.x/)
  * Apache Log4j Core - [org.apache.logging.log4j:log4j-core](https://logging.apache.org/log4j/2.x/)
  * Log4j API to SLF4J Adapter - [org.apache.logging.log4j:log4j-to-slf4j](https://logging.apache.org/log4j/2.x/)
- * Maven 4 API :: Meta annotations - [org.apache.maven:maven-api-annotations](https://maven.apache.org/ref/4.0.0-rc-5/api/maven-api-annotations/)
- * Maven 4 API :: XML - [org.apache.maven:maven-api-xml](https://maven.apache.org/ref/4.0.0-rc-5/api/maven-api-xml/)
- * Maven Artifact - [org.apache.maven:maven-artifact](https://maven.apache.org/ref/3.9.12/maven-artifact/)
- * Maven Builder Support - [org.apache.maven:maven-builder-support](https://maven.apache.org/ref/3.9.12/maven-builder-support/)
- * Maven Compat - [org.apache.maven:maven-compat](https://maven.apache.org/ref/3.9.12/maven-compat/)
- * Maven Core - [org.apache.maven:maven-core](https://maven.apache.org/ref/3.9.12/maven-core/)
- * Maven Model - [org.apache.maven:maven-model](https://maven.apache.org/ref/3.9.12/maven-model/)
- * Maven Model Builder - [org.apache.maven:maven-model-builder](https://maven.apache.org/ref/3.9.12/maven-model-builder/)
- * Maven Plugin API - [org.apache.maven:maven-plugin-api](https://maven.apache.org/ref/3.9.12/maven-plugin-api/)
- * Maven Repository Metadata Model - [org.apache.maven:maven-repository-metadata](https://maven.apache.org/ref/3.9.12/maven-repository-metadata/)
- * Maven Artifact Resolver Provider - [org.apache.maven:maven-resolver-provider](https://maven.apache.org/ref/3.9.12/maven-resolver-provider/)
- * Maven Settings - [org.apache.maven:maven-settings](https://maven.apache.org/ref/3.9.12/maven-settings/)
- * Maven Settings Builder - [org.apache.maven:maven-settings-builder](https://maven.apache.org/ref/3.9.12/maven-settings-builder/)
- * Maven 4 XML Implementation - [org.apache.maven:maven-xml](https://maven.apache.org/ref/4.0.0-rc-5/maven-impl-modules/maven-xml/)
- * Maven Plugin Testing Mechanism - [org.apache.maven.plugin-testing:maven-plugin-testing-harness](https://maven.apache.org/plugin-testing/maven-plugin-testing-harness/)
- * Maven Plugin Tools Java Annotations - [org.apache.maven.plugin-tools:maven-plugin-annotations](https://maven.apache.org/plugin-tools/maven-plugin-annotations)
- * Maven Artifact Resolver API - [org.apache.maven.resolver:maven-resolver-api](https://maven.apache.org/resolver/maven-resolver-api/)
- * Maven Artifact Resolver Implementation - [org.apache.maven.resolver:maven-resolver-impl](https://maven.apache.org/resolver/maven-resolver-impl/)
- * Maven Artifact Resolver Named Locks - [org.apache.maven.resolver:maven-resolver-named-locks](https://maven.apache.org/resolver/maven-resolver-named-locks/)
- * Maven Artifact Resolver SPI - [org.apache.maven.resolver:maven-resolver-spi](https://maven.apache.org/resolver/maven-resolver-spi/)
- * Maven Artifact Resolver Utilities - [org.apache.maven.resolver:maven-resolver-util](https://maven.apache.org/resolver/maven-resolver-util/)
- * Apache Maven Invoker - [org.apache.maven.shared:maven-invoker](https://maven.apache.org/shared/maven-invoker/)
- * Apache Maven Shared Utils - [org.apache.maven.shared:maven-shared-utils](https://maven.apache.org/shared/maven-shared-utils/)
- * Apache Maven Wagon :: API - [org.apache.maven.wagon:wagon-provider-api](https://maven.apache.org/wagon/wagon-provider-api)
  * tomcat-embed-core - [org.apache.tomcat.embed:tomcat-embed-core](https://tomcat.apache.org/)
  * tomcat-embed-el - [org.apache.tomcat.embed:tomcat-embed-el](https://tomcat.apache.org/)
  * tomcat-embed-websocket - [org.apache.tomcat.embed:tomcat-embed-websocket](https://tomcat.apache.org/)
@@ -216,14 +182,6 @@ Apache License Version 2.0
  * AssertJ Core - [org.assertj:assertj-core](https://assertj.github.io/doc/#assertj-core)
  * Awaitility - [org.awaitility:awaitility](http://awaitility.org)
  * jose4j - [org.bitbucket.b_c:jose4j](https://bitbucket.org/b_c/jose4j/)
- * Plexus Cipher: encryption/decryption Component - [org.codehaus.plexus:plexus-cipher](https://codehaus-plexus.github.io/plexus-cipher/)
- * Plexus Classworlds - [org.codehaus.plexus:plexus-classworlds](https://codehaus-plexus.github.io/plexus-classworlds/)
- * Plexus :: Component Annotations (deprecated) - [org.codehaus.plexus:plexus-component-annotations](https://codehaus-plexus.github.io/plexus-containers/plexus-component-annotations/)
- * Plexus Interpolation API - [org.codehaus.plexus:plexus-interpolation](https://codehaus-plexus.github.io/plexus-pom/plexus-interpolation/)
- * Plexus Security Dispatcher Component - [org.codehaus.plexus:plexus-sec-dispatcher](https://codehaus-plexus.github.io/plexus-sec-dispatcher/)
- * Plexus Testing - [org.codehaus.plexus:plexus-testing](https://codehaus-plexus.github.io/plexus-testing/)
- * Plexus Common Utilities - [org.codehaus.plexus:plexus-utils](https://codehaus-plexus.github.io/plexus-utils/)
- * Plexus XML Utilities - [org.codehaus.plexus:plexus-xml](https://codehaus-plexus.github.io/plexus-xml/)
  * Hibernate Validator Engine - [org.hibernate.validator:hibernate-validator](https://hibernate.org/validator)
  * Javassist - [org.javassist:javassist](http://www.javassist.org/)
  * JBoss Logging 3 - [org.jboss.logging:jboss-logging](https://www.jboss.org)
@@ -243,14 +201,12 @@ Apache License Version 2.0
  * kotlinx-serialization-core - [org.jetbrains.kotlinx:kotlinx-serialization-core-jvm](https://github.com/Kotlin/kotlinx.serialization)
  * JSpecify annotations - [org.jspecify:jspecify](http://jspecify.org/)
  * Objenesis - [org.objenesis:objenesis](http://objenesis.org/objenesis)
- * OpenSearch Testcontainers integration - [org.opensearch:opensearch-testcontainers](https://github.com/opensearch-project/opensearch-testcontainers/)
  * OpenSearch Java Client - [org.opensearch.client:opensearch-java](https://github.com/opensearch-project/opensearch-java/)
  * org.opentest4j:opentest4j - [org.opentest4j:opentest4j](https://github.com/ota4j-team/opentest4j)
  * Reflections - [org.reflections:reflections](http://github.com/ronmamo/reflections)
  * Scala Library - [org.scala-lang:scala-library](https://www.scala-lang.org/)
  * Scala Reflect - [org.scala-lang:scala-reflect](https://www.scala-lang.org/)
  * JSONassert - [org.skyscreamer:jsonassert](https://github.com/skyscreamer/JSONassert)
- * SnakeYAML Engine - [org.snakeyaml:snakeyaml-engine](https://bitbucket.org/snakeyaml/snakeyaml-engine)
  * springdoc-openapi-starter-common - [org.springdoc:springdoc-openapi-starter-common](https://springdoc.org/springdoc-openapi-starter-common/)
  * springdoc-openapi-starter-webmvc-api - [org.springdoc:springdoc-openapi-starter-webmvc-api](https://springdoc.org/springdoc-openapi-starter-webmvc-api/)
  * springdoc-openapi-starter-webmvc-ui - [org.springdoc:springdoc-openapi-starter-webmvc-ui](https://springdoc.org/springdoc-openapi-starter-webmvc-ui/)
@@ -327,7 +283,6 @@ Apache License Version 2.0
  * spring-security-oauth2-core - [org.springframework.security:spring-security-oauth2-core](https://spring.io/projects/spring-security)
  * spring-security-oauth2-jose - [org.springframework.security:spring-security-oauth2-jose](https://spring.io/projects/spring-security)
  * spring-security-oauth2-resource-server - [org.springframework.security:spring-security-oauth2-resource-server](https://spring.io/projects/spring-security)
- * spring-security-test - [org.springframework.security:spring-security-test](https://spring.io/projects/spring-security)
  * spring-security-web - [org.springframework.security:spring-security-web](https://spring.io/projects/spring-security)
  * Togglz - Core Framework - [org.togglz:togglz-core](https://www.togglz.org/togglz-core/)
  * Togglz - Spring Boot Auto Configuration - [org.togglz:togglz-spring-boot-autoconfigure](https://www.togglz.org/togglz-spring-boot/togglz-spring-boot-autoconfigure/)
@@ -383,7 +338,6 @@ Apache License Version 2.0
  * Amazon MSK Library for AWS Identity and Access Management - [software.amazon.msk:aws-msk-iam-auth](https://docs.aws.amazon.com/msk/latest/developerguide/iam-access-control.html)
  * Jackson-core - [tools.jackson.core:jackson-core](https://github.com/FasterXML/jackson-core)
  * jackson-databind - [tools.jackson.core:jackson-databind](https://github.com/FasterXML/jackson)
- * Jackson-dataformat-YAML - [tools.jackson.dataformat:jackson-dataformat-yaml](https://github.com/FasterXML/jackson-dataformats-text)
 
 BSD 2-Clause License
 -------------------------------
@@ -395,10 +349,7 @@ BSD License 3
 -------------------------------
 
  * Protocol Buffers [Core] - [com.google.protobuf:protobuf-java](https://developers.google.com/protocol-buffers/protobuf-java/)
- * JGit - Core - [org.eclipse.jgit:org.eclipse.jgit](https://www.eclipse.org/jgit//org.eclipse.jgit)
  * Hamcrest - [org.hamcrest:hamcrest](http://hamcrest.org/JavaHamcrest/)
- * Hamcrest Core - [org.hamcrest:hamcrest-core](http://hamcrest.org/JavaHamcrest/)
- * asm - [org.ow2.asm:asm](http://asm.ow2.io/)
  * asm - [org.ow2.asm:asm](http://asm.ow2.io/)
 
 Bouncy Castle Licence
@@ -440,18 +391,6 @@ Eclipse Public License v2.0
  * JUnit Platform Commons - [org.junit.platform:junit-platform-commons](https://junit.org/)
  * JUnit Platform Engine API - [org.junit.platform:junit-platform-engine](https://junit.org/)
  * JUnit Platform Launcher - [org.junit.platform:junit-platform-launcher](https://junit.org/)
- * JUnit Vintage Engine - [org.junit.vintage:junit-vintage-engine](https://junit.org/)
-
-Eclipse Public License, Version 1.0
--------------------------------
-
- * JUnit - [junit:junit](http://junit.org)
-
-Eclipse Public License, Version 2.0
--------------------------------
-
- * org.eclipse.sisu:org.eclipse.sisu.inject - [org.eclipse.sisu:org.eclipse.sisu.inject](https://eclipse.dev/sisu/org.eclipse.sisu.inject/)
- * org.eclipse.sisu:org.eclipse.sisu.plexus - [org.eclipse.sisu:org.eclipse.sisu.plexus](https://eclipse.dev/sisu/org.eclipse.sisu.plexus/)
 
 GNU General Public License, version 2 (GPL2), with the classpath exception
 -------------------------------
@@ -505,7 +444,6 @@ MIT License
  * Duct Tape - [org.rnorth.duct-tape:duct-tape](https://github.com/rnorth/duct-tape)
  * JUL to SLF4J bridge - [org.slf4j:jul-to-slf4j](http://www.slf4j.org)
  * SLF4J API Module - [org.slf4j:slf4j-api](http://www.slf4j.org)
- * SLF4J Simple Provider - [org.slf4j:slf4j-simple](http://www.slf4j.org)
  * Testcontainers Core - [org.testcontainers:testcontainers](https://java.testcontainers.org)
  * Testcontainers :: JUnit Jupiter Extension - [org.testcontainers:testcontainers-junit-jupiter](https://java.testcontainers.org)
  * webjars-locator-lite - [org.webjars:webjars-locator-lite](https://webjars.org)
@@ -521,11 +459,6 @@ Public Domain
  * AOP alliance - [aopalliance:aopalliance](http://aopalliance.sourceforge.net)
  * HdrHistogram - [org.hdrhistogram:HdrHistogram](http://hdrhistogram.github.io/HdrHistogram/)
  * LatencyUtils - [org.latencyutils:LatencyUtils](http://latencyutils.github.io/LatencyUtils/)
-
-The BSD 2-Clause License
--------------------------------
-
- * Stax2 API - [org.codehaus.woodstox:stax2-api](http://github.com/FasterXML/stax2-api)
 
 WTFPL
 -------------------------------

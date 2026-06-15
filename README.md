@@ -39,8 +39,8 @@ A physical OpenSearch index managed by rollover. One index per `IndexTypeVersion
 **Pattern:** `<System>_<BusinessObject>_v<MajorVersion>-<Seq>` (snake_case, 6-digit zero-padded sequence)
 
 **Examples:**
-- `prezius_registration_v1-000001`
-- `wvs_declaration_v2-000001`
+- `precious_registration_v1-000001`
+- `www_declaration_v2-000001`
 - `jme_decree_document_v1-000002`
 
 ### IndexWriteAlias
@@ -50,8 +50,8 @@ An alias pointing to the currently writable index for a specific major version.
 **Pattern:** `<System>_<BusinessObject>_V<MajorVersion>_write`
 
 **Examples:**
-- `prezius_registration_v1_write`
-- `wvs_declaration_v2_write`
+- `precious_registration_v1_write`
+- `www_declaration_v2_write`
 - `jme_decree_document_v1_write`
 
 ### IndexReadAlias
@@ -61,8 +61,8 @@ An alias pointing to all indices of an `IndexType` (all versions, all intervals)
 **Pattern:** `<System>_<BusinessObject>_read`
 
 **Examples:**
-- `prezius_registration_read`
-- `wvs_declaration_read`
+- `precious_registration_read`
+- `www_declaration_read`
 - `jme_decree_document_read`
 
 ## Startup Behaviour
@@ -71,15 +71,18 @@ On startup, the `IndexMappingUpdater` component iterates over every registered `
 
 ### 1. Index Template
 
-For each `IndexTypeDescriptor` the service creates or updates a composable index template:
+**The index template must be created by IaC before the service starts.** The service looks up the template by name and throws a fatal error if it does not exist.
 
-| Derived name                   | Pattern                                      |
-|--------------------------------|----------------------------------------------|
-| `{indexWriteAlias}_template`   | `{base}-*` (e.g. `mydocument_v1-*`)          |
+The template name is derived from the write alias by stripping the `_write` suffix:
 
-The template embeds the full field mapping (including a `_meta.schema_version` equal to the IndexType's minor version), the **`IndexReadAlias`** for the index type, and the **`plugins.index_state_management.rollover_alias`** setting pointing to the write alias. New rollover indices that match the pattern will automatically inherit this mapping, be added to the read alias, and have the correct ISM rollover alias — no manual alias management is needed after a rollover.
+| Write alias                        | Template name                  | Index pattern              |
+|------------------------------------|--------------------------------|----------------------------|
+| `jme_decree_document_v1_write`     | `jme_decree_document_v1`       | `jme_decree_document_v1-*` |
+| `precious_registration_v1_write`    | `precious_registration_v1`      | `precious_registration_v1-*`|
 
-The template is only written when it does not yet exist **or** when its stored version number no longer matches the current minor version.
+IaC is responsible for the full template structure: index pattern, settings (shards, replicas, refresh interval, `plugins.index_state_management.rollover_alias`), and the **read alias**. The service only updates the **mapping** portion (including `_meta.schema_version`) when the template's stored version number no longer matches the current minor version. All other template settings and aliases are preserved.
+
+> **Why the write alias is not in the template:** When ISM performs a rollover it creates the new index (`-000002`) from the template. If the template contained the write alias, the new index would receive it immediately — while the old index still holds it — causing OpenSearch to reject the rollover with *"Rollover alias can point to multiple indices, found duplicated alias"*. The write alias is therefore set explicitly by the service only when it creates the initial physical index, and is then owned exclusively by ISM.
 
 ### 2. Index Mapping on existing physical indices
 
@@ -87,7 +90,7 @@ After updating the template, the service resolves the physical write index point
 
 - If the version **matches** the current minor version, the index is left untouched.
 - If the version **differs**, the service pushes the updated mapping to that index via `PUT /{physicalIndex}/_mapping`.
-- If the write alias **does not exist yet**, startup fails with a clear error — the physical index and its aliases must be created by IaC before the service can start.
+- If the write alias **does not exist yet**, the service creates the initial physical index `{base}-000001` (e.g. `jme_decree_document_v1-000001`) with the write alias (`is_write_index: true`) set explicitly in the create request. The IaC-created index template automatically applies settings (shards, replicas, ISM rollover alias) and the read alias to the new index.
 - If OpenSearch returns a `cluster_block_exception` (e.g. the disk flood-stage watermark has been exceeded and the index has a `read-only-allow-delete` block), the service **logs a warning and continues** — startup is not aborted. The mapping update will be applied automatically on the next startup once the block is removed.
 
 ## Installing / Getting started
@@ -131,30 +134,13 @@ jeap:
 
 Index rollover is managed server-side by an **OpenSearch ISM (Index State Management) policy** configured in IaC. The service itself does not trigger rollover.
 
-The index template created by the service on startup includes the `plugins.index_state_management.rollover_alias` setting pointing to the write alias. This ensures that every new partition created by ISM automatically inherits the correct rollover alias setting and can itself be rolled over.
+**IaC responsibility:** IaC creates an index template for each index type (e.g. via `provider_index_templates.json`) with:
+- Settings: number of shards, replicas, refresh interval, and `plugins.index_state_management.rollover_alias` pointing to the write alias
+- Aliases: **read alias only** (the write alias must not be in the template — see note in [Index Template](#1-index-template))
+- An empty mapping (Terraform `ignore_changes` on mapping so the service can manage it independently)
+- An ISM policy attached via `ism_template` matching the index pattern
 
-**IaC responsibility:** The initial physical index (e.g. `jme_decree_document_v1-000001`) must be created by IaC with:
-- The write alias pointing to it (`is_write_index: true`)
-- The `plugins.index_state_management.rollover_alias` setting pointing to the write alias
-- An ISM policy attached via `ism_template` matching the index pattern `jme_*-*`
-
-```json
-# IaC example (provider_indices.json)
-"jme_decree_document_v1-000001": {
-  "number_of_shards": 2,
-  "number_of_replicas": 1,
-  "refresh_interval": "5s",
-  "plugins": {
-    "index_state_management": {
-      "rollover_alias": "jme_decree_document_v1_write"
-    }
-  },
-  "aliases": {
-    "jme_decree_document_v1_write": { "is_write_index": true },
-    "jme_decree_document_read": {}
-  }
-}
-```
+The writer service creates the initial physical index (`{base}-000001`) on first startup if the write alias does not exist yet. It explicitly sets the write alias (`is_write_index: true`) in the create request; the IaC-created template applies the read alias and ISM rollover alias setting automatically.
 
 ### OpenSearch Permissions
 
@@ -179,7 +165,6 @@ The service principal (IAM role or OpenSearch internal user) requires the follow
 | `indices:admin/aliases/get`    | Resolve which physical indices are behind a write alias                                  |
 | `indices:admin/mappings/get`   | Read the current mapping of a physical index                                             |
 | `indices:admin/mapping/put`    | Update the mapping of a physical index on startup                                        |
-| `indices:admin/settings/update`| Set `plugins.index_state_management.rollover_alias` on physical indices (handled by IaC) |
 | `indices:data/write/bulk*`     | Write documents via the bulk API (wildcard form)                                         |
 | `indices:data/write/bulk`      | Write documents via the bulk API                                                         |
 | `indices:data/write/index`     | Index (upsert) individual documents                                                      |
@@ -206,7 +191,6 @@ As a JSON snippet for an OpenSearch security role:
         "indices:admin/aliases/get",
         "indices:admin/mappings/get",
         "indices:admin/mapping/put",
-        "indices:admin/settings/update",
         "indices:data/write/bulk*",
         "indices:data/write/bulk",
         "indices:data/write/index",
@@ -381,141 +365,11 @@ The annotation is processed by `jeap-messaging-contract-annotation-processor` (p
 
 ## SearchItems Provider Endpoint
 
-The domain services providing the SearchItem data must expose a REST endpoint in order to be callable by the index writer service.
-
-To activate this API, the service instance must include the `jeap-opensearch-searchitem-api` dependency:
-
-```xml
-<dependency>
-    <groupId>ch.admin.bit.jeap</groupId>
-    <artifactId>jeap-opensearch-searchitem-api</artifactId>
-</dependency>
-```
-
-The oauth2-security configuration of the resource server must reference an authorization server, which defines an oauth client with the role "system_@searchitem_#read".
-
-Example for the OAuth-Mock-Server:
-```yml
-oauth-mock-data:
-  clients:
-    - client-id: "bazg-system-searchitem"
-      client-secret: "..."
-      context: "SYS"
-      userroles: ["system_@searchitem_#read"]
-```
-
-This oauth client is then referenced in the `opensearch/messages.json` configuration of the index writer service via the `oauthClientId` field of each operation. When configured, the index writer service uses this client to acquire an access token and call the SearchItem provider API.
-```json
-{
-  "messages": [
-    {
-      "messageName": "...",
-      "topicName": "...",
-      "operations": [
-        {
-          "indexType": "...",
-          "indexOperation": "...",
-          "condition": "...",
-          "uri": "...",
-          "oauthClientId": "bazg-system-searchitem",
-          "referenceProvider": "..."
-        }
-      ]
-    }
-  ]
-}
-```
-
+Domain services that provide SearchItem data must expose a REST endpoint callable by the index writer service. This is provided by the **`jeap-opensearch-searchitem-api`** library — see [github.com/jeap-admin-ch/jeap-opensearch-searchitem-api](https://github.com/jeap-admin-ch/jeap-opensearch-searchitem-api) for setup and configuration details.
 
 ## SearchItemClient
 
-`SearchItemClient` (from `jeap-opensearch-client-starter`) is the authorization-aware search client for consuming documents that were indexed by this service. It supports **multi-version search**: you pass all `IndexType` versions of the same business object, and the client dispatches deserialization per document based on the `search_item.major_version` field written at index time.
-
-### Setup
-
-Include the starter in your consuming service:
-
-```xml
-<dependency>
-    <groupId>ch.admin.bit.jeap</groupId>
-    <artifactId>jeap-opensearch-client-starter</artifactId>
-</dependency>
-```
-
-Configure the OpenSearch connection:
-
-```yaml
-jeap:
-  opensearch:
-    client:
-      connection:
-        uri: https://my-domain.eu-central-2.es.amazonaws.com
-```
-
-### Method Families
-
-Every method family comes in three authorization variants:
-
-| Variant       | Method suffix      | Auth behaviour                                                                                                                            |
-|---------------|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| Unchecked     | `…Unchecked(…)`    | No access check, no result filtering                                                                                                      |
-| Explicit auth | `…(…, auth)`       | Checks access via `IndexTypeAuthorization`; `auth == null` throws `IndexTypeAccessDeniedException`; applies BP pre-filter and post-filter |
-| User auth     | `…WithUserAuth(…)` | Resolves `Authorization` from `UserSearchItemAuthorization` and delegates to the explicit-auth variant                                    |
-
-Each variant has two overloads: one that accepts a `Consumer<SearchRequest.Builder>` customizer for setting size, from, sorting etc., and one without.
-
-### Multi-Version Search
-
-All provided `IndexType` instances must share the same `system` and `originType`. The search targets the shared `IndexReadAlias` (e.g. `jme_decree_document_read`) which covers all versions.
-
-```java
-// V1 and V2 of the same index type — share system and originType
-List<IndexType<?>> versions = List.of(DECREE_DOCUMENT_V1, DECREE_DOCUMENT_V2);
-
-// Unchecked — no authorization
-List<SearchItemView> results = searchItemClient.searchMultiVersionUnchecked(
-        versions,
-        Query.of(q -> q.term(t -> t.field("data.status").value("ACTIVE"))));
-
-// With explicit authorization
-List<SearchItemView> results = searchItemClient.searchMultiVersion(
-        versions,
-        Query.of(q -> q.matchAll(m -> m)),
-        auth);
-
-// With user authorization (resolved from request context) and a customizer
-List<SearchItemView> results = searchItemClient.searchMultiVersionWithUserAuth(
-        versions,
-        Query.of(q -> q.matchAll(m -> m)),
-        builder -> builder.size(50));
-```
-
-Each returned `SearchItemView` carries:
-- `origin()` — the `Origin` of the business object (id, bpId, tenant, …)
-- `data()` — the deserialized business data as `Object`; cast to the concrete data class after inspecting `indexType()`
-- `indexType()` — the `IndexTypeDescriptor` used to deserialize this document (V1 or V2); cast to the concrete `IndexType<T>` if the typed data class is needed
-
-Documents missing `search_item.major_version` or with an unknown major version throw a `SearchItemClientException`. All other errors (`IOException`, `OpenSearchException`, deserialization failures) are also wrapped in `SearchItemClientException`.
-
-### Authorization Model
-
-When `auth` is non-null the client enforces three layers:
-
-1. **Pre-check** — `IndexTypeAuthorization.checkAccess(latestVersion, auth)` verifies the caller has at least one matching role. Throws `IndexTypeAccessDeniedException` on failure.
-2. **BP pre-filter** — if the caller has no global userrole, an OpenSearch `bool` query with a `terms` filter on `origin.bp_id` is injected automatically, so only documents belonging to the caller's authorized business partners are returned from OpenSearch.
-3. **Post-filter** — `SearchItemAuthorization.filterByAuthorization` drops any remaining items the caller is not entitled to see.
-
-Roles are always taken from the **latest** `IndexType` version (highest major/minor). Older versions may have different roles — this is intentional and supported.
-
-### Validation
-
-`SearchItemClientException` is thrown for the following configuration mistakes (detected before the search is executed):
-
-| Condition                                    | Message                                                         |
-|----------------------------------------------|-----------------------------------------------------------------|
-| `indexTypes` is null or empty                | `"indexTypes must not be null or empty"`                        |
-| Two types differ in `system` or `originType` | `"All index types must share the same system and origin type…"` |
-| Two types share the same `majorVersion`      | `"Duplicate major version …"`                                   |
+The authorization-aware search client for consuming documents indexed by this service is provided by the **`jeap-opensearch-client-starter`** library — see [github.com/jeap-admin-ch/jeap-opensearch-client-starter](https://github.com/jeap-admin-ch/jeap-opensearch-client-starter) for setup and usage.
 
 ## Metrics
 
@@ -531,8 +385,7 @@ This library needs to be versioned using [Semantic Versioning](http://semver.org
 
 ## Index Type Registry Maven Plugin
 
-The plugin that validates and generates artifacts from the index type registry is documented separately:
-[jeap-opensearch-index-type-registry-maven-plugin/README.md](jeap-opensearch-index-type-registry-maven-plugin/README.md)
+The Maven plugin that validates the index type registry and generates typed Java artifacts is maintained in its own repository: [github.com/jeap-admin-ch/jeap-opensearch-index-type-registry-maven-plugin](https://github.com/jeap-admin-ch/jeap-opensearch-index-type-registry-maven-plugin).
 
 ## Note
 

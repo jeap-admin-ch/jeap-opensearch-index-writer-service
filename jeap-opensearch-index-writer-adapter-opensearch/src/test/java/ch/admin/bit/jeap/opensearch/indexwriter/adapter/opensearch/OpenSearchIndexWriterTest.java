@@ -67,6 +67,9 @@ class OpenSearchIndexWriterTest {
     private IndexTemplateManager indexTemplateManager;
 
     @Mock
+    private PhysicalIndexManager physicalIndexManager;
+
+    @Mock
     private IndexMappingManager indexMappingManager;
 
     @InjectMocks
@@ -75,9 +78,9 @@ class OpenSearchIndexWriterTest {
     // --- ensureIndexReady ---
 
     @Test
-    void ensureIndexReady_throwsException_whenOpenSearchFails() throws IOException {
+    void ensureIndexReady_throwsException_whenOpenSearchFails() {
         when(indexMappingManager.parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
-                .thenThrow(new IOException("Connection refused"));
+                .thenThrow(OpenSearchIndexWriterException.mappingParseFailed(INDEX_WRITE_ALIAS, new IOException("Connection refused")));
 
         assertThatThrownBy(() -> indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON)))
                 .isInstanceOf(OpenSearchIndexWriterException.class)
@@ -114,6 +117,7 @@ class OpenSearchIndexWriterTest {
 
         verify(indexMappingManager).parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION));
         verify(indexTemplateManager).ensureIndexTemplateUpToDate(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, typeMapping);
+        verify(physicalIndexManager).ensureWriteIndexExists(INDEX_WRITE_ALIAS);
         verify(indexMappingManager).ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, typeMapping);
     }
 

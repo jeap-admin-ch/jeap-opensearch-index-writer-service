@@ -42,7 +42,7 @@ class MessageIndexingServiceTest {
 
     private static final String BASE_URI = "https://example.com/api";
     private static final String INDEX_TYPE = "PreziusRegistration";
-    private static final String INDEX_WRITE_ALIAS = "prezius-registration-write";
+    private static final String INDEX_WRITE_ALIAS = "precious-registration-write";
     private static final OriginReference ORIGIN_REF = new OriginReference(INDEX_TYPE, "id-1", null);
 
     /** Simple typed data class used to verify the dataClass() conversion path. */
