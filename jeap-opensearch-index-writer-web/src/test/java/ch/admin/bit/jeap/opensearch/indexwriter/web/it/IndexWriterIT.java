@@ -11,14 +11,13 @@ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.apache.hc.core5.http.HttpHost;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.ExistsRequest;
 import org.opensearch.client.opensearch.core.GetRequest;
 import org.opensearch.client.opensearch.core.IndexRequest;
-import org.opensearch.client.opensearch.indices.Alias;
 import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
-import org.apache.hc.core5.http.HttpHost;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -36,7 +35,6 @@ import org.togglz.core.util.NamedFeature;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -61,12 +59,6 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
     private static final String TRUE_CONDITION_INDEX_WRITE_ALIAS = "test_document_true_condition_v1_write";
     private static final String FALSE_CONDITION_INDEX_WRITE_ALIAS = "test_document_false_condition_v1_write";
     private static final String FEATURE_FLAG_INDEX_WRITE_ALIAS = "test_document_feature_flag_v1_write";
-    private static final Map<String, String> WRITE_TO_READ_ALIAS = Map.of(
-            INDEX_WRITE_ALIAS, "test_document_read",
-            DELETE_INDEX_WRITE_ALIAS, "test_document_delete_read",
-            TRUE_CONDITION_INDEX_WRITE_ALIAS, "test_document_true_condition_read",
-            FALSE_CONDITION_INDEX_WRITE_ALIAS, "test_document_false_condition_read",
-            FEATURE_FLAG_INDEX_WRITE_ALIAS, "test_document_feature_flag_read");
     private static final NamedFeature IT_FEATURE_FLAG = new NamedFeature("IT_FEATURE_FLAG_INDEXING");
 
     @Container
@@ -96,29 +88,12 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         registry.add("spring.security.oauth2.client.provider.search-item-provider.token-uri",
                 () -> wireMock.baseUrl() + "/oauth/token");
         registry.add("test.wiremock.base-url", wireMock::baseUrl);
-        createIaCTemplates();
-    }
-
-    // Runs before Spring context starts (called from @DynamicPropertySource), so IndexMappingUpdater
-    // finds the templates on startup just like it would in production after IaC has run.
-    private static void createIaCTemplates() {
+        // Initialize plain client (no Jackson naming strategy) used for reading back documents in assertions.
+        // Templates are created by the service itself at startup via IndexMappingUpdater.
         var transport = ApacheHttpClient5TransportBuilder
                 .builder(new HttpHost("http", OPENSEARCH.getHost(), OPENSEARCH.getMappedPort(9200)))
                 .build();
         plainOpenSearchClient = new OpenSearchClient(transport);
-        WRITE_TO_READ_ALIAS.forEach((writeAlias, readAlias) -> {
-            String templateName = writeAlias.endsWith("_write")
-                    ? writeAlias.substring(0, writeAlias.length() - "_write".length())
-                    : writeAlias;
-            try {
-                plainOpenSearchClient.indices().putIndexTemplate(r -> r
-                        .name(templateName)
-                        .indexPatterns(List.of(templateName + "-*"))
-                        .template(t -> t.aliases(Map.of(readAlias, new Alias.Builder().build()))));
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to create IaC template for " + writeAlias, e);
-            }
-        });
     }
 
     @Autowired

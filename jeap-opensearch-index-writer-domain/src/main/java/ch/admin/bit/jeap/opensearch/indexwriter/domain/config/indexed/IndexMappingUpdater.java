@@ -2,6 +2,8 @@ package ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indexed;
 
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indextype.IndexTypeRepository;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexTemplateSettings;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexTemplateSettingsProvider;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +17,14 @@ public class IndexMappingUpdater {
 
     private final IndexTypeRepository indexTypeRepository;
     private final IndexWriter indexWriter;
+    private final IndexTemplateSettingsProvider templateSettingsProvider;
 
     @PostConstruct
     void updateIndexMapping() {
         List<IndexType<?>> all = indexTypeRepository.getAll();
         for (IndexType<?> indexType : all) {
-            indexWriter.ensureIndexReady(indexType.indexWriteAlias(), indexType.indexReadAlias(), indexType.minorVersion(), indexType.mappingDefinition());
+            IndexTemplateSettings settings = templateSettingsProvider.getSettings(indexType.indexWriteAlias());
+            indexWriter.ensureIndexReady(indexType.indexWriteAlias(), indexType.indexReadAlias(), indexType.minorVersion(), indexType.mappingDefinition(), settings);
         }
     }
 }

@@ -1,6 +1,7 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch;
 
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexTemplateSettings;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,11 +28,11 @@ public class OpenSearchIndexWriter implements IndexWriter {
     private final IndexMappingManager indexMappingManager;
 
     @Override
-    public void ensureIndexReady(String indexWriteAlias, String indexReadAlias, int minorVersion, Supplier<InputStream> mappingDefinition) {
+    public void ensureIndexReady(String indexWriteAlias, String indexReadAlias, int minorVersion, Supplier<InputStream> mappingDefinition, IndexTemplateSettings templateSettings) {
         log.debug("Ensuring index, template and mapping are ready for index '{}', minor version: {}", indexWriteAlias, minorVersion);
         try {
             TypeMapping typeMapping = indexMappingManager.parseMappingWithVersion(indexWriteAlias, mappingDefinition.get(), minorVersion);
-            indexTemplateManager.ensureIndexTemplateUpToDate(indexWriteAlias, indexReadAlias, minorVersion, typeMapping);
+            indexTemplateManager.ensureIndexTemplateUpToDate(indexWriteAlias, indexReadAlias, minorVersion, typeMapping, templateSettings);
             physicalIndexManager.ensureWriteIndexExists(indexWriteAlias);
             indexMappingManager.ensureMappingUpToDate(indexWriteAlias, minorVersion, typeMapping);
         } catch (OpenSearchException e) {

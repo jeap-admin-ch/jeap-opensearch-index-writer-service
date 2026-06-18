@@ -2,6 +2,8 @@ package ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch;
 
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.exception.IndexWriterException;
 
+import java.util.List;
+
 class OpenSearchIndexWriterException extends IndexWriterException {
 
     private OpenSearchIndexWriterException(String message, boolean retryable, Throwable cause) {
@@ -10,11 +12,6 @@ class OpenSearchIndexWriterException extends IndexWriterException {
 
     private OpenSearchIndexWriterException(String message, boolean retryable) {
         super(message, retryable);
-    }
-
-    static OpenSearchIndexWriterException indexTemplateNotFound(String indexWriteAlias) {
-        return new OpenSearchIndexWriterException(
-                "Index template for write alias '%s' does not exist — it must be created by IaC before starting the service".formatted(indexWriteAlias), false);
     }
 
     static OpenSearchIndexWriterException ambiguousWriteIndex(String indexWriteAlias, java.util.Set<String> physicalIndices) {
@@ -27,6 +24,18 @@ class OpenSearchIndexWriterException extends IndexWriterException {
                 ("Index '%s' has is_write_index=false for alias '%s' — likely caused by a failed ISM rollover that left the alias in a broken state. " +
                  "Fix by running: POST /_aliases {\"actions\":[{\"add\":{\"index\":\"%s\",\"alias\":\"%s\",\"is_write_index\":true}}]}")
                         .formatted(physicalIndex, indexWriteAlias, physicalIndex, indexWriteAlias), false);
+    }
+
+    static OpenSearchIndexWriterException missingTemplateSettings(String templateName) {
+        return new OpenSearchIndexWriterException(
+                "No index template settings configured for '%s'. Add 'jeap.opensearch.indexwriter.index-templates.%s' or a 'jeap.opensearch.indexwriter.index-templates.default' fallback entry."
+                        .formatted(templateName, templateName), false);
+    }
+
+    static OpenSearchIndexWriterException incompleteTemplateSettings(String templateName, List<String> missingProperties) {
+        return new OpenSearchIndexWriterException(
+                "Incomplete index template settings for '%s': missing properties %s. All three must be set: number-of-shards, number-of-replicas, refresh-interval."
+                        .formatted(templateName, missingProperties), false);
     }
 
     static OpenSearchIndexWriterException templateSetupFailed(String indexWriteAlias, Throwable cause) {

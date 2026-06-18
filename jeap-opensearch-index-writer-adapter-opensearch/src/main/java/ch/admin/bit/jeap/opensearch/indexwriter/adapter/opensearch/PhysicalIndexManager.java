@@ -39,7 +39,7 @@ class PhysicalIndexManager {
     }
 
     private void createInitialPhysicalIndex(String indexWriteAlias) {
-        String physicalIndexName = indexWriteAlias.substring(0, indexWriteAlias.lastIndexOf("_write")) + "-000001";
+        String physicalIndexName = IndexNaming.initialPhysicalIndexName(indexWriteAlias);
         log.info("Write alias '{}' does not exist — creating initial physical index '{}'", indexWriteAlias, physicalIndexName);
         try {
             // The write alias is set explicitly here so ISM can manage it exclusively during rollover.

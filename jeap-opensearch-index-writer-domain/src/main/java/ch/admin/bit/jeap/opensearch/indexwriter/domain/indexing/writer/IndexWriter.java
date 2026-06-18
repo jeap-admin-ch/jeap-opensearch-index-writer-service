@@ -7,7 +7,7 @@ import java.util.function.Supplier;
 
 public interface IndexWriter {
 
-    void ensureIndexReady(String indexWriteAlias, String indexReadAlias, int minorVersion, Supplier<InputStream> mappingDefinition);
+    void ensureIndexReady(String indexWriteAlias, String indexReadAlias, int minorVersion, Supplier<InputStream> mappingDefinition, IndexTemplateSettings templateSettings);
 
     @SuppressWarnings("java:S1452")
     void upsertSearchItem(String indexWriteAlias, String documentId, SearchItemIndexed<?> searchItem);

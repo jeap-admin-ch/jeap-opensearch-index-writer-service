@@ -4,6 +4,7 @@ import ch.admin.bit.jeap.opensearch.indextype.Origin;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItem;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemMetadata;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexTemplateSettings;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -46,6 +47,7 @@ class OpenSearchIndexWriterTest {
     private static final String INDEX_READ_ALIAS = "orders_read";
     private static final int MAJOR_VERSION = 1;
     private static final int MINOR_VERSION = 3;
+    private static final IndexTemplateSettings TEMPLATE_SETTINGS = new IndexTemplateSettings(1, 1, "1s");
     private static final String MAPPING_JSON = """
             {
               "mappings": {
@@ -82,7 +84,7 @@ class OpenSearchIndexWriterTest {
         when(indexMappingManager.parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
                 .thenThrow(OpenSearchIndexWriterException.mappingParseFailed(INDEX_WRITE_ALIAS, new IOException("Connection refused")));
 
-        assertThatThrownBy(() -> indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON)))
+        assertThatThrownBy(() -> indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON), TEMPLATE_SETTINGS))
                 .isInstanceOf(OpenSearchIndexWriterException.class)
                 .hasMessageContaining(INDEX_WRITE_ALIAS);
     }
@@ -94,7 +96,7 @@ class OpenSearchIndexWriterTest {
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
 
-        assertThatThrownBy(() -> indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON)))
+        assertThatThrownBy(() -> indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON), TEMPLATE_SETTINGS))
                 .isInstanceOf(OpenSearchIndexWriterException.class);
 
         assertThat(logs.list)
@@ -113,10 +115,10 @@ class OpenSearchIndexWriterTest {
         when(indexMappingManager.parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
                 .thenReturn(typeMapping);
 
-        indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON));
+        indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON), TEMPLATE_SETTINGS);
 
         verify(indexMappingManager).parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION));
-        verify(indexTemplateManager).ensureIndexTemplateUpToDate(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, typeMapping);
+        verify(indexTemplateManager).ensureIndexTemplateUpToDate(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, typeMapping, TEMPLATE_SETTINGS);
         verify(physicalIndexManager).ensureWriteIndexExists(INDEX_WRITE_ALIAS);
         verify(indexMappingManager).ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, typeMapping);
     }

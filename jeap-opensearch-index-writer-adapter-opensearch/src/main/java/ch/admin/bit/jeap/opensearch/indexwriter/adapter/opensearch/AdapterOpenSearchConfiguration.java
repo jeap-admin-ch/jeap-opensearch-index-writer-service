@@ -1,5 +1,6 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch;
 
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexTemplateSettingsProvider;
 import org.apache.hc.core5.http.HttpHost;
 import org.opensearch.client.json.jackson3.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
@@ -14,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @AutoConfiguration
 @ComponentScan(basePackages = "ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch")
-@EnableConfigurationProperties(AdapterOpenSearchProperties.class)
+@EnableConfigurationProperties({AdapterOpenSearchProperties.class, IndexWriterProperties.class})
 public class AdapterOpenSearchConfiguration {
 
     @Bean
@@ -38,5 +39,11 @@ public class AdapterOpenSearchConfiguration {
         } catch (java.net.URISyntaxException e) {
             throw new IllegalStateException("Invalid OpenSearch URL: " + properties.getUrl(), e);
         }
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    IndexTemplateSettingsProvider indexTemplateSettingsProvider(IndexWriterProperties properties) {
+        return properties::settingsFor;
     }
 }

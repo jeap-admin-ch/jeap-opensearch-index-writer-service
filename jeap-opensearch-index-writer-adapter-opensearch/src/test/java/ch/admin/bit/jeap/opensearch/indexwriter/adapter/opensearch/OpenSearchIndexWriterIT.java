@@ -4,6 +4,7 @@ import ch.admin.bit.jeap.opensearch.indextype.Origin;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItem;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemMetadata;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexTemplateSettings;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.hc.core5.http.HttpHost;
 import org.junit.jupiter.api.BeforeAll;
@@ -44,9 +45,9 @@ class OpenSearchIndexWriterIT {
     private static final String INDEX_WRITE_ALIAS = "orders_v1_write";
     private static final String INDEX_READ_ALIAS = "orders_read";
     private static final String PHYSICAL_INDEX = "orders_v1-000001";
-    private static final String STRUCTURE_WRITE_ALIAS = "orders_v1_structure_write";
-    private static final String STRUCTURE_READ_ALIAS = "orders_v1_structure_read";
-    private static final String STRUCTURE_INDEX = "orders_v1_structure-000001";
+    private static final String STRUCTURE_WRITE_ALIAS = "decrees_v1_write";
+    private static final String STRUCTURE_READ_ALIAS = "decrees_read";
+    private static final String STRUCTURE_INDEX = "decrees_v1-000001";
     private static final int MAJOR_VERSION = 1;
     private static final int MINOR_VERSION = 3;
 
@@ -95,29 +96,17 @@ class OpenSearchIndexWriterIT {
         IndexMappingManager indexMappingManager = new IndexMappingManager(client, dataFieldValidator);
         indexWriter = new OpenSearchIndexWriter(client, dataFieldValidator, indexTemplateManager, physicalIndexManager, indexMappingManager);
 
-        createIaCTemplate(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS);
-        client.indices().create(new CreateIndexRequest.Builder().index(PHYSICAL_INDEX).build());
-        client.indices().putAlias(new PutAliasRequest.Builder()
-                .index(PHYSICAL_INDEX)
-                .name(INDEX_WRITE_ALIAS)
-                .build());
-        // Apply the mapping immediately so that dynamic: false is in effect before any document is written.
-        // Without this, OpenSearch auto-maps unknown fields (e.g. data as text), causing type conflicts.
-        indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream);
-
-        createIaCTemplate(STRUCTURE_WRITE_ALIAS, STRUCTURE_READ_ALIAS);
-        client.indices().create(new CreateIndexRequest.Builder().index(STRUCTURE_INDEX).build());
-        client.indices().putAlias(new PutAliasRequest.Builder()
-                .index(STRUCTURE_INDEX)
-                .name(STRUCTURE_WRITE_ALIAS)
-                .build());
+        // Service creates the template and initial physical index (000001) on first ensureIndexReady call.
+        // Mapping with dynamic: false is applied immediately so OpenSearch does not auto-map data fields.
+        indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s"));
+        indexWriter.ensureIndexReady(STRUCTURE_WRITE_ALIAS, STRUCTURE_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s"));
     }
 
     @Test
     void ensureIndexReady_updatesMappingInTemplateAndOnPhysicalIndex() throws IOException {
-        indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream);
+        indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s"));
 
-        String templateName = IndexTemplateManager.templateName(INDEX_WRITE_ALIAS);
+        String templateName = IndexNaming.logicalName(INDEX_WRITE_ALIAS);
 
         BooleanResponse templateExists = client.indices().existsIndexTemplate(
                 new ExistsIndexTemplateRequest.Builder().name(templateName).build());
@@ -142,23 +131,26 @@ class OpenSearchIndexWriterIT {
 
     @Test
     void indexTemplate_matchesExpectedStructure() throws Exception {
-        indexWriter.ensureIndexReady(STRUCTURE_WRITE_ALIAS, STRUCTURE_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream);
+        indexWriter.ensureIndexReady(STRUCTURE_WRITE_ALIAS, STRUCTURE_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s"));
 
-        String templateName = IndexTemplateManager.templateName(STRUCTURE_WRITE_ALIAS);
+        String templateName = IndexNaming.logicalName(STRUCTURE_WRITE_ALIAS);
         String actual = prettyJson(httpGet(openSearchUrl + "/_index_template/" + templateName));
 
         assertThat(actual).isEqualTo("""
                 {
                   "index_templates" : [ {
-                    "name" : "orders_v1_structure",
+                    "name" : "decrees_v1",
                     "index_template" : {
-                      "index_patterns" : [ "orders_v1_structure-*" ],
+                      "index_patterns" : [ "decrees_v1-*" ],
                       "template" : {
                         "settings" : {
                           "index" : {
+                            "refresh_interval" : "1s",
+                            "number_of_shards" : "1",
+                            "number_of_replicas" : "1",
                             "plugins" : {
                               "index_state_management" : {
-                                "rollover_alias" : "orders_v1_structure_write"
+                                "rollover_alias" : "decrees_v1_write"
                               }
                             }
                           }
@@ -175,7 +167,7 @@ class OpenSearchIndexWriterIT {
                           }
                         },
                         "aliases" : {
-                          "orders_v1_structure_read" : { }
+                          "decrees_read" : { }
                         }
                       },
                       "composed_of" : [ ],
@@ -187,13 +179,13 @@ class OpenSearchIndexWriterIT {
 
     @Test
     void physicalIndexMapping_matchesExpectedStructure() throws Exception {
-        indexWriter.ensureIndexReady(STRUCTURE_WRITE_ALIAS, STRUCTURE_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream);
+        indexWriter.ensureIndexReady(STRUCTURE_WRITE_ALIAS, STRUCTURE_READ_ALIAS, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s"));
 
         String actual = prettyJson(httpGet(openSearchUrl + "/" + STRUCTURE_INDEX + "/_mapping"));
 
         assertThat(actual).isEqualTo("""
                 {
-                  "orders_v1_structure-000001" : {
+                  "decrees_v1-000001" : {
                     "mappings" : {
                       "dynamic" : "false",
                       "_meta" : {
@@ -292,37 +284,32 @@ class OpenSearchIndexWriterIT {
 
     @Test
     void ensureIndexReady_logsWarningAndDoesNotThrow_whenIndexHasReadOnlyAllowDeleteBlock() throws Exception {
-        String blockedPhysicalIndex = "orders_v1-blocked-000001";
-        String blockedWriteAlias = "orders_v1_blocked_write";
-        String blockedReadAlias = "orders_v1_blocked_read";
+        String blockedWriteAlias = "payments_v1_write";
+        String blockedReadAlias = "payments_read";
+        String blockedPhysicalIndex = "payments_v1-000001";
 
-        createIaCTemplate(blockedWriteAlias, blockedReadAlias);
-        client.indices().create(new CreateIndexRequest.Builder().index(blockedPhysicalIndex).build());
-        client.indices().putAlias(new PutAliasRequest.Builder()
-                .index(blockedPhysicalIndex)
-                .name(blockedWriteAlias)
-                .build());
+        indexWriter.ensureIndexReady(blockedWriteAlias, blockedReadAlias, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s"));
         try {
             // Simulate disk flood-stage watermark: put index in read-only-allow-delete mode
             httpPut(openSearchUrl + "/" + blockedPhysicalIndex + "/_settings",
                     "{\"index.blocks.read_only_allow_delete\": true}");
 
+            // Call with a newer version to trigger a mapping update — which the block prevents; service logs a warning and continues
             assertThatNoException().isThrownBy(() ->
-                    indexWriter.ensureIndexReady(blockedWriteAlias, blockedReadAlias, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream));
+                    indexWriter.ensureIndexReady(blockedWriteAlias, blockedReadAlias, MINOR_VERSION + 1, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(1, 1, "1s")));
         } finally {
             client.indices().delete(new DeleteIndexRequest.Builder().index(blockedPhysicalIndex).build());
         }
     }
 
     @Test
-    void ensureIndexReady_createsPhysicalIndex_whenWriteAliasDoesNotExist() throws Exception {
-        String writeAlias = "orders_v1_autocreate_write";
-        String readAlias = "orders_v1_autocreate_read";
-        String expectedPhysicalIndex = "orders_v1_autocreate-000001";
+    void ensureIndexReady_createsTemplateAndPhysicalIndex_whenNeitherExistsYet() throws Exception {
+        String writeAlias = "invoices_v1_write";
+        String readAlias = "invoices_read";
+        String expectedPhysicalIndex = "invoices_v1-000001";
 
-        createIaCTemplate(writeAlias, readAlias);
         try {
-            indexWriter.ensureIndexReady(writeAlias, readAlias, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream);
+            indexWriter.ensureIndexReady(writeAlias, readAlias, MINOR_VERSION, OpenSearchIndexWriterIT::mappingStream, new IndexTemplateSettings(2, 0, "5s"));
 
             GetAliasResponse aliasResponse = client.indices().getAlias(
                     new GetAliasRequest.Builder().index("*").name(writeAlias).build());
@@ -343,21 +330,6 @@ class OpenSearchIndexWriterIT {
                 client.indices().delete(new DeleteIndexRequest.Builder().index(expectedPhysicalIndex).build());
             } catch (Exception ignored) {}
         }
-    }
-
-    private static void createIaCTemplate(String writeAlias, String readAlias) throws IOException {
-        // Only the read alias goes in the template — write alias is managed exclusively by ISM rollover.
-        // Having is_write_index: true in the template causes a "duplicated alias" error when ISM creates
-        // the next rollover index (the template would apply the alias before ISM can atomically swap it).
-        client.indices().putIndexTemplate(new PutIndexTemplateRequest.Builder()
-                .name(IndexTemplateManager.templateName(writeAlias))
-                .indexPatterns(IndexTemplateManager.indexPattern(writeAlias))
-                .template(t -> t
-                        .aliases(Map.of(readAlias, new Alias.Builder().build()))
-                        .settings(s -> s.customSettings(
-                                "plugins.index_state_management.rollover_alias", JsonData.of(writeAlias))))
-                .version(0L)
-                .build());
     }
 
     private boolean documentExists(String docId) throws IOException {

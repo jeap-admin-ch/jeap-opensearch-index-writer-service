@@ -25,6 +25,11 @@ jeap:
     indexwriter:
       connection:
         url: http://localhost:1  # overridden by @DynamicPropertySource in tests
+      index-templates:
+        default:
+          number-of-shards: 1
+          number-of-replicas: 0
+          refresh-interval: "1s"
 
 logging:
   level:

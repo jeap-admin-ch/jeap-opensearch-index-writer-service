@@ -71,7 +71,7 @@ On startup, the `IndexMappingUpdater` component iterates over every registered `
 
 ### 1. Index Template
 
-**The index template must be created by IaC before the service starts.** The service looks up the template by name and throws a fatal error if it does not exist.
+The service **creates and manages the index template itself**. On every startup it unconditionally applies the template via PUT, creating it if it does not exist or overwriting it if it does. The template always contains the current mapping, configured settings, the read alias, and the ISM rollover alias setting.
 
 The template name is derived from the write alias by stripping the `_write` suffix:
 
@@ -80,9 +80,11 @@ The template name is derived from the write alias by stripping the `_write` suff
 | `jme_decree_document_v1_write`     | `jme_decree_document_v1`       | `jme_decree_document_v1-*` |
 | `precious_registration_v1_write`    | `precious_registration_v1`      | `precious_registration_v1-*`|
 
-IaC is responsible for the full template structure: index pattern, settings (shards, replicas, refresh interval, `plugins.index_state_management.rollover_alias`), and the **read alias**. The service only updates the **mapping** portion (including `_meta.schema_version`) when the template's stored version number no longer matches the current minor version. All other template settings and aliases are preserved.
+Settings are looked up under `jeap.opensearch.indexwriter.index-templates.<templateName>` (i.e. the template name without `_write`), falling back to the `default` entry. If neither is present, startup fails with a clear error.
 
-> **Why the write alias is not in the template:** When ISM performs a rollover it creates the new index (`-000002`) from the template. If the template contained the write alias, the new index would receive it immediately — while the old index still holds it — causing OpenSearch to reject the rollover with *"Rollover alias can point to multiple indices, found duplicated alias"*. The write alias is therefore set explicitly by the service only when it creates the initial physical index, and is then owned exclusively by ISM.
+> **Template settings vs existing partitions:** Changes to `number-of-shards`, `number-of-replicas`, and `refresh-interval` are written to the template on every startup but only take effect for new physical indices (partitions) created by ISM rollover — existing partitions are not affected. The mapping, by contrast, is applied to both the template and all existing physical indices immediately on startup.
+
+> **Why the write alias is not in the template:** When ISM performs a rollover it creates the new partition from the template. If the template contained the write alias, the new partition would receive it immediately — while the old one still holds it — causing OpenSearch to reject the rollover with *"Rollover alias can point to multiple indices, found duplicated alias"*. The write alias is therefore set explicitly by the service only when it creates the initial physical index, and is then owned exclusively by ISM.
 
 ### 2. Index Mapping on existing physical indices
 
@@ -90,7 +92,7 @@ After updating the template, the service resolves the physical write index point
 
 - If the version **matches** the current minor version, the index is left untouched.
 - If the version **differs**, the service pushes the updated mapping to that index via `PUT /{physicalIndex}/_mapping`.
-- If the write alias **does not exist yet**, the service creates the initial physical index `{base}-000001` (e.g. `jme_decree_document_v1-000001`) with the write alias (`is_write_index: true`) set explicitly in the create request. The IaC-created index template automatically applies settings (shards, replicas, ISM rollover alias) and the read alias to the new index.
+- If the write alias **does not exist yet**, the service creates the initial physical index `{base}-000001` (e.g. `jme_decree_document_v1-000001`) with the write alias (`is_write_index: true`) set explicitly in the create request. The index template automatically applies settings (shards, replicas, ISM rollover alias) and the read alias to the new index.
 - If OpenSearch returns a `cluster_block_exception` (e.g. the disk flood-stage watermark has been exceeded and the index has a `read-only-allow-delete` block), the service **logs a warning and continues** — startup is not aborted. The mapping update will be applied automatically on the next startup once the block is removed.
 
 ## Installing / Getting started
@@ -99,11 +101,17 @@ Normally you will not use this project directly, but instead set up your own ind
 
 ## Properties
 
-| Property                                                      | Default | Description                                                                                                                                                                                               |
-|---------------------------------------------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `jeap.opensearch.indexwriter.connection.url`                  | —       | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com`).                                                                                                                   |
-| `jeap.opensearch.indexwriter.connection.signing-region`       | —       | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.). Leave blank for non-AWS deployments. |
-| `jeap.opensearch.indexwriter.search-item-provider.timeout`    | 30s     | Connect timeout for the rest client accessing the provider apis.                                                                                                                                          |
+| Property                                                                              | Default | Description                                                                                                                                                                                               |
+|---------------------------------------------------------------------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jeap.opensearch.indexwriter.connection.url`                                          | —       | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com`).                                                                                                                   |
+| `jeap.opensearch.indexwriter.connection.signing-region`                               | —       | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.). Leave blank for non-AWS deployments. |
+| `jeap.opensearch.indexwriter.index-templates.default.number-of-shards`               | —       | Fallback number of primary shards when no per-template entry is configured. Required if not all templates have a dedicated entry.                                                                         |
+| `jeap.opensearch.indexwriter.index-templates.default.number-of-replicas`             | —       | Fallback number of replicas when no per-template entry is configured.                                                                                                                                     |
+| `jeap.opensearch.indexwriter.index-templates.default.refresh-interval`               | —       | Fallback refresh interval when no per-template entry is configured.                                                                                                                                       |
+| `jeap.opensearch.indexwriter.index-templates.<templateName>.number-of-shards`        | —       | Number of primary shards for this index template. Applied to the template on every startup; takes effect only when a new partition is created by ISM rollover.                                            |
+| `jeap.opensearch.indexwriter.index-templates.<templateName>.number-of-replicas`      | —       | Number of replicas for this index template. Applied to the template on every startup; takes effect only when a new partition is created by ISM rollover.                                                  |
+| `jeap.opensearch.indexwriter.index-templates.<templateName>.refresh-interval`        | —       | Refresh interval for this index template. Applied to the template on every startup; takes effect only when a new partition is created by ISM rollover.                                                    |
+| `jeap.opensearch.indexwriter.search-item-provider.timeout`                            | 30s     | Connect timeout for the rest client accessing the provider apis.                                                                                                                                          |
 
 ### OpenSearch Connection
 
@@ -134,13 +142,26 @@ jeap:
 
 Index rollover is managed server-side by an **OpenSearch ISM (Index State Management) policy** configured in IaC. The service itself does not trigger rollover.
 
-**IaC responsibility:** IaC creates an index template for each index type (e.g. via `provider_index_templates.json`) with:
-- Settings: number of shards, replicas, refresh interval, and `plugins.index_state_management.rollover_alias` pointing to the write alias
-- Aliases: **read alias only** (the write alias must not be in the template — see note in [Index Template](#1-index-template))
-- An empty mapping (Terraform `ignore_changes` on mapping so the service can manage it independently)
-- An ISM policy attached via `ism_template` matching the index pattern
+**IaC responsibility:** IaC attaches an ISM policy via `ism_template` matching the index pattern (e.g. `jme_decree_document_v1-*`) and configures rollover thresholds. The index template is now managed by the service (see [Index Template](#1-index-template)).
 
-The writer service creates the initial physical index (`{base}-000001`) on first startup if the write alias does not exist yet. It explicitly sets the write alias (`is_write_index: true`) in the create request; the IaC-created template applies the read alias and ISM rollover alias setting automatically.
+The writer service creates the initial physical index (`{base}-000001`) on first startup if the write alias does not exist yet. It explicitly sets the write alias (`is_write_index: true`) in the create request; the template automatically applies the read alias and ISM rollover alias setting.
+
+Configure template settings. The key is the **template name** (write alias without `_write` suffix). Use the special key `default` as a fallback for any template not explicitly configured. If neither a specific entry nor `default` is present, startup fails with a clear error. Settings are applied to the template on every startup; they take effect for new partitions created by ISM rollover only — existing partitions are not affected.
+
+```yaml
+jeap:
+  opensearch:
+    indexwriter:
+      index-templates:
+        default:
+          number-of-shards: 1
+          number-of-replicas: 1
+          refresh-interval: "1s"
+        jme_decree_document_v1:
+          number-of-shards: 2
+          number-of-replicas: 1
+          refresh-interval: "5s"
+```
 
 ### OpenSearch Permissions
 
@@ -150,7 +171,6 @@ The service principal (IAM role or OpenSearch internal user) requires the follow
 
 | Permission                         | Purpose                                                                          |
 |------------------------------------|----------------------------------------------------------------------------------|
-| `indices:admin/index_template/get` | Read index templates on startup to check if they are up to date                  |
 | `indices:admin/index_template/put` | Create or update index templates on startup                                      |
 | `indices:admin/aliases/get`        | Required at cluster level for alias resolution (also needed as index permission) |
 | `indices:data/write/bulk`          | Write documents via the bulk API                                                 |
@@ -177,7 +197,6 @@ As a JSON snippet for an OpenSearch security role:
 ```json
 {
   "cluster_permissions": [
-    "indices:admin/index_template/get",
     "indices:admin/index_template/put",
     "indices:admin/aliases/get",
     "indices:data/write/bulk"
