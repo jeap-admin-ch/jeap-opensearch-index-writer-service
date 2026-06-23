@@ -8,7 +8,7 @@ Index types are defined in separate Maven artifacts and consumed as dependencies
 
 | Concept        | Pattern                             | Regex                       | Examples                         |
 |----------------|-------------------------------------|-----------------------------|----------------------------------|
-| System         | Name of the business application    | `[A-Z][a-z0-9]+`            | `JME`, `WVS`, `Prezius`          |
+| System         | Name of the business application    | `[A-Z][a-z0-9]+`            | `JME`, `WVS`, `Precious`          |
 | BusinessObject | Type of the business object         | `[A-Z][a-z0-9]+`            | `DecreeDocument`, `Registration` |
 | MajorVersion   | Breaking schema version             | Integer                     | `1`, `2`                         |
 | MinorVersion   | Backwards-compatible schema version | Integer                     | `0`, `1`                         |

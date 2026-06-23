@@ -5,53 +5,40 @@ items into OpenSearch. A service instance is created by depending on the templat
 index type and message configuration specific to the owning domain.
 
 ```mermaid
-flowchart TD
-    DomainEvent{{DomainEvent}}
-    ArchivedCreated{{ArchivedArtifactVersionCreated}}
-    ArchivedDeleted{{ArchivedArtifactVersionDeleted}}
+flowchart LR
+    subgraph DomainService["Domain Service"]
+        DS["Domain Service"]
+        Event{{Domain Event}}
+    end
 
-    DomainService["Domain-Service"]
-    PAS["Process-Archive-Service"]
-    IndexWriter["OpenSearch-Index-Writer-Service"]
-    OpenSearch[["OpenSearch Cluster"]]
+    subgraph ServiceInstance["Service Instance\n(jeap-opensearch-index-writer-service-instance)"]
+        IndexWriter["OpenSearch Index Writer"]
+        MessagesJson[/"messages.json"/]
+    end
 
     subgraph MavenRepo["Maven Repository"]
         IndexType["IndexType"]
     end
 
-    subgraph Artifact["jeap-opensearch-index-writer-service-instance"]
-        MessagesJson[/"messages.json"/]
-    end
+    OpenSearch[["OpenSearch Cluster"]]
 
-    DomainService -- "publishes" --> DomainEvent
-    DomainEvent -- "triggers" --> IndexWriter
+    DS -- "publishes" --> Event
+    Event -- "triggers" --> IndexWriter
+    IndexWriter -- "GET SearchItem" --> DS
+    IndexWriter -- "create/update templates & mappings\nUPSERT / DELETE documents" --> OpenSearch
 
-    PAS -- "publishes" --> ArchivedCreated
-    PAS -- "publishes" --> ArchivedDeleted
-    ArchivedCreated -- "triggers" --> IndexWriter
-    ArchivedDeleted -. "triggers" .-> IndexWriter
-
-    IndexWriter -- "GET SearchItem" --> DomainService
-    IndexWriter -- "GET SearchItem" --> PAS
-
-    DomainService -. "depends on" .-> IndexType
+    DS -. "depends on" .-> IndexType
     IndexWriter -. "depends on" .-> IndexType
-    PAS -. "depends on" .-> IndexType
-
-    Artifact -. "parent" .-> IndexWriter
-
-    IndexWriter -- "create/update templates/mappings\ncreate, update, delete SearchItem" --> OpenSearch
 
     classDef event fill:#8888d9,stroke:#888,color:#333
-    classDef service fill:##008000,stroke:#888,color:#333
+    classDef service fill:#d4edda,stroke:#5a9e6f,color:#1a3a2a
     classDef core fill:#d9d9d9,stroke:#666,color:#333,font-weight:bold
-    classDef artifact fill:#bcd6ee,stroke:#6699cc,color:#1a3a5c
     classDef artifactlight fill:#dceefb,stroke:#6699cc,color:#1a3a5c
     classDef target fill:#ffffff,stroke:#666,color:#333
     classDef repo fill:#ececec,stroke:#999,color:#333
 
-    class DomainEvent,ArchivedCreated,ArchivedDeleted event
-    class DomainService,PAS service
+    class Event event
+    class DS service
     class IndexWriter core
     class OpenSearch target
     class IndexType repo
@@ -115,11 +102,11 @@ On startup, `IndexMappingUpdater` iterates over every registered `IndexType` and
 flowchart TD
     Start([Startup]) --> Template[PUT index template]
     Template --> AliasExists{Write alias exists?}
-    AliasExists -->|No| CreateIndex[Create initial index\nwith write alias]
+    AliasExists -->|No| CreateIndex[Create physical index\nwith write alias]
     AliasExists -->|Yes| CheckVersion{Mapping version\nmatches?}
+    CreateIndex --> CheckVersion
     CheckVersion -->|Yes| Done([Ready])
     CheckVersion -->|No| UpdateMapping[PUT mapping to\ncurrent write index]
-    CreateIndex --> Done
     UpdateMapping --> Done
 ```
 
