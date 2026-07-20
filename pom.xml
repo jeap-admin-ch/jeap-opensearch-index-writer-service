@@ -40,6 +40,7 @@
     <properties>
         <maven.javadoc.skip>false</maven.javadoc.skip>
         <opensearch.version>3.9.0</opensearch.version>
+        <wiremock-spring-boot.version>4.2.2</wiremock-spring-boot.version>
     </properties>
 
     <modules>
