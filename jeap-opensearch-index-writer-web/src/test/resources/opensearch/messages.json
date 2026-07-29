@@ -31,6 +31,12 @@
           "condition": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITAlwaysFalseCondition"
         },
         {
+          "indexType": "TestDocumentNested",
+          "indexOperation": "UPSERT",
+          "uri": "${test.wiremock.base-url}",
+          "referenceProvider": "ch.admin.bit.jeap.opensearch.indexwriter.web.it.ITReferenceProvider"
+        },
+        {
           "indexType": "TestDocumentFeatureFlag",
           "indexOperation": "UPSERT",
           "uri": "${test.wiremock.base-url}",

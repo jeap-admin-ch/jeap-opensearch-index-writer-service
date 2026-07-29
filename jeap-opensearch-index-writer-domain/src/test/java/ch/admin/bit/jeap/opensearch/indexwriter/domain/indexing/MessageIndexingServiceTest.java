@@ -14,6 +14,8 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.Origin
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.ReferenceProvider;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -47,6 +49,26 @@ class MessageIndexingServiceTest {
 
     /** Simple typed data class used to verify the dataClass() conversion path. */
     record TypedData(@JsonProperty("my_field") String myField) {}
+
+    /**
+     * Typed data class in the shape the index type registry generates for a mapping that declares
+     * an {@code object} field and a {@code nested} field: {@code object} becomes a single record,
+     * {@code nested} becomes a {@code List} of records, because an OpenSearch {@code nested} field
+     * holds an array of objects.
+     */
+    record TypedDataWithNested(
+            @JsonProperty("single_object") SingleObject singleObject,
+            List<Cases> cases
+    ) {
+        record SingleObject(String name) {}
+
+        record Cases(
+                @JsonProperty("case_reference") String caseReference,
+                @JsonProperty("control_pattern") ControlPattern controlPattern
+        ) {
+            record ControlPattern(@JsonProperty("factual_name") String factualName) {}
+        }
+    }
 
     @Mock
     private FeatureManager featureManager;
@@ -300,6 +322,63 @@ class MessageIndexingServiceTest {
         verify(indexWriter).upsertSearchItem(eq(INDEX_WRITE_ALIAS), eq("id-1"), captor.capture());
         assertThat(captor.getValue().data()).isInstanceOf(TypedData.class);
         assertThat(((TypedData) captor.getValue().data()).myField()).isEqualTo("hello");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void upsertWithTypedDataClass_convertsObjectFieldToSingleRecordAndNestedFieldToList() {
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        // An `object` field arrives as a single JSON object, a `nested` field as a JSON array
+        JsonNode dataNode = new JsonMapper().readTree("""
+                {
+                  "single_object": { "name": "the-name" },
+                  "cases": [
+                    { "case_reference": "C-1", "control_pattern": { "factual_name": "n1" } },
+                    { "case_reference": "C-2", "control_pattern": { "factual_name": "n2" } }
+                  ]
+                }
+                """);
+        SearchItemResult result = new SearchItemResult(1, 0, new SearchItem<>(validOrigin(), dataNode));
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.of(result));
+        when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 1)).thenReturn(Optional.of(indexType));
+        when(indexType.indexWriteAlias()).thenReturn(INDEX_WRITE_ALIAS);
+        when(indexType.dataClass()).thenReturn((Class) TypedDataWithNested.class);
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        ArgumentCaptor<SearchItemIndexed<?>> captor = ArgumentCaptor.forClass(SearchItemIndexed.class);
+        verify(indexWriter).upsertSearchItem(eq(INDEX_WRITE_ALIAS), eq("id-1"), captor.capture());
+        TypedDataWithNested data = (TypedDataWithNested) captor.getValue().data();
+        assertThat(data.singleObject().name()).isEqualTo("the-name");
+        assertThat(data.cases()).hasSize(2);
+        assertThat(data.cases().getFirst().caseReference()).isEqualTo("C-1");
+        assertThat(data.cases().getFirst().controlPattern().factualName()).isEqualTo("n1");
+        assertThat(data.cases().getLast().caseReference()).isEqualTo("C-2");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void upsertWithTypedDataClass_throwsIndexingExceptionWhenNestedFieldIsNotAList() {
+        // Guards the contract between the registry's code generator and this service: if a `nested`
+        // mapping field were generated as a single-valued component instead of a List, the array the
+        // producer sends could not be deserialized and the document would never be indexed.
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        JsonNode dataNode = new JsonMapper().readTree("""
+                { "single_object": [ { "name": "a" }, { "name": "b" } ] }
+                """);
+        SearchItemResult result = new SearchItemResult(1, 0, new SearchItem<>(validOrigin(), dataNode));
+        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.of(result));
+        when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 1)).thenReturn(Optional.of(indexType));
+        when(indexType.dataClass()).thenReturn((Class) TypedDataWithNested.class);
+        when(indexType.originType()).thenReturn(INDEX_TYPE);
+
+        assertThatThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)))
+                .isInstanceOf(IndexingException.class)
+                .hasMessageContaining("TypedDataWithNested")
+                .hasMessageContaining(INDEX_TYPE)
+                .cause().isInstanceOf(MismatchedInputException.class);
     }
 
     @Test

@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.togglz.core.manager.FeatureManager;
 import org.togglz.core.util.NamedFeature;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
@@ -100,7 +101,9 @@ public class MessageIndexingService {
         try {
             T typedData = jsonMapper.convertValue(result.searchItem().data(), dataClass);
             return new SearchItem<>(result.searchItem().origin(), typedData).withMetadata(metadata);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | JacksonException e) {
+            // Jackson 3 reports a shape mismatch as JacksonException (a RuntimeException), not as the
+            // IllegalArgumentException that Jackson 2 wrapped conversion failures in
             throw IndexingException.dataDeserializationFailed(dataClass, indexType.originType(), e);
         }
     }

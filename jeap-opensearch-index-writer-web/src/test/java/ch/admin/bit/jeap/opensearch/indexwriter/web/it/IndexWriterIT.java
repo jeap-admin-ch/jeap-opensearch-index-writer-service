@@ -59,6 +59,7 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
     private static final String TRUE_CONDITION_INDEX_WRITE_ALIAS = "test_document_true_condition_v1_write";
     private static final String FALSE_CONDITION_INDEX_WRITE_ALIAS = "test_document_false_condition_v1_write";
     private static final String FEATURE_FLAG_INDEX_WRITE_ALIAS = "test_document_feature_flag_v1_write";
+    private static final String NESTED_INDEX_WRITE_ALIAS = "test_document_nested_v1_write";
     private static final NamedFeature IT_FEATURE_FLAG = new NamedFeature("IT_FEATURE_FLAG_INDEXING");
 
     @Container
@@ -141,6 +142,7 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         deleteDocument(TRUE_CONDITION_INDEX_WRITE_ALIAS, ORIGIN_ID);
         deleteDocument(FALSE_CONDITION_INDEX_WRITE_ALIAS, ORIGIN_ID);
         deleteDocument(FEATURE_FLAG_INDEX_WRITE_ALIAS, ORIGIN_ID);
+        deleteDocument(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID);
     }
 
     @Test
@@ -226,6 +228,46 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         assertThat(data.has("another_camel_field")).isTrue();
         assertThat(data.has("camelCaseField")).isFalse();
         assertThat(data.has("anotherCamelField")).isFalse();
+    }
+
+    @Test
+    void upsertWithObjectAndNestedDataFields_writesSingleObjectAndArrayToOpenSearch() throws IOException {
+        // An `object` mapping field arrives as a single JSON object and a `nested` field as a JSON
+        // array. Both must survive conversion into the typed data class and be written back to
+        // OpenSearch in the same shape — an array for the nested field, a single object for the other.
+        wireMock.stubFor(get(urlPathEqualTo("/index-api/searchitems"))
+                .withQueryParam("origin_id", equalTo(ORIGIN_ID))
+                .atPriority(1)
+                .willReturn(aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("index-major-version", "1")
+                        .withHeader("index-minor-version", "0")
+                        .withBody("""
+                                {"origin":{"id":"doc-1"},"data":{
+                                  "single_object":{"name":"the-name"},
+                                  "cases":[
+                                    {"case_reference":"C-1","control_pattern":{"factual_name":"n1"}},
+                                    {"case_reference":"C-2","control_pattern":{"factual_name":"n2"}}
+                                  ]
+                                }}
+                                """)));
+
+        sendSync(TEST_TOPIC, declarationEvent("upsert-object-and-nested"));
+
+        await().atMost(Duration.ofMillis(TEST_TIMEOUT))
+                .until(() -> documentExists(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID));
+
+        ObjectNode source = getDocumentSource(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID);
+        ObjectNode data = (ObjectNode) source.get("data");
+
+        assertThat(data.get("single_object").isObject()).isTrue();
+        assertThat(data.get("single_object").get("name").asText()).isEqualTo("the-name");
+
+        assertThat(data.get("cases").isArray()).isTrue();
+        assertThat(data.get("cases")).hasSize(2);
+        assertThat(data.get("cases").get(0).get("case_reference").asText()).isEqualTo("C-1");
+        assertThat(data.get("cases").get(0).get("control_pattern").get("factual_name").asText()).isEqualTo("n1");
+        assertThat(data.get("cases").get(1).get("case_reference").asText()).isEqualTo("C-2");
     }
 
     private boolean documentExists(String alias, String docId) {

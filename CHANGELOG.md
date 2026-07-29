@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-07-29
+
+### Fixed
+- A failure to deserialize the search item data into the index type's `dataClass()` is wrapped in an `IndexingException` again. Jackson 3 reports a shape mismatch as `JacksonException`, a `RuntimeException`, whereas Jackson 2 wrapped conversion failures in `IllegalArgumentException` — so the `catch` clause no longer matched and the raw Jackson exception escaped without the index type and data class context.
+
 ## [3.4.0] - 2026-07-26
 
 ### Dependencies

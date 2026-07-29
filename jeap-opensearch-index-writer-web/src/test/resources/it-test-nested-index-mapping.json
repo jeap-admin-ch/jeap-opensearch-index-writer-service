@@ -1,0 +1,53 @@
+{
+  "mappings": {
+    "dynamic": false,
+    "properties": {
+      "search_item": {
+        "type": "object",
+        "properties": {
+          "upserted_at":   { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+          "major_version": { "type": "integer" },
+          "minor_version": { "type": "integer" }
+        }
+      },
+      "origin": {
+        "type": "object",
+        "properties": {
+          "id":       { "type": "keyword" },
+          "version":  { "type": "keyword" },
+          "bp_id":    { "type": "keyword" },
+          "tenant":   { "type": "keyword" },
+          "created":  { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+          "modified": { "type": "date", "format": "strict_date_optional_time||epoch_millis" },
+          "reference": {
+            "type": "object",
+            "enabled": false
+          }
+        }
+      },
+      "data": {
+        "type": "object",
+        "properties": {
+          "single_object": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "text" }
+            }
+          },
+          "cases": {
+            "type": "nested",
+            "properties": {
+              "case_reference": { "type": "keyword" },
+              "control_pattern": {
+                "type": "object",
+                "properties": {
+                  "factual_name": { "type": "text" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
