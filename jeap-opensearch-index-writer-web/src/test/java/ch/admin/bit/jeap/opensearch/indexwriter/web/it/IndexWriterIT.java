@@ -235,30 +235,13 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         // An `object` mapping field arrives as a single JSON object and a `nested` field as a JSON
         // array. Both must survive conversion into the typed data class and be written back to
         // OpenSearch in the same shape — an array for the nested field, a single object for the other.
-        wireMock.stubFor(get(urlPathEqualTo("/index-api/searchitems"))
-                .withQueryParam("origin_id", equalTo(ORIGIN_ID))
-                .atPriority(1)
-                .willReturn(aResponse()
-                        .withHeader("Content-Type", "application/json")
-                        .withHeader("index-major-version", "1")
-                        .withHeader("index-minor-version", "0")
-                        .withBody("""
-                                {"origin":{"id":"doc-1"},"data":{
-                                  "single_object":{"name":"the-name"},
-                                  "cases":[
-                                    {"case_reference":"C-1","control_pattern":{"factual_name":"n1"}},
-                                    {"case_reference":"C-2","control_pattern":{"factual_name":"n2"}}
-                                  ]
-                                }}
-                                """)));
-
-        sendSync(TEST_TOPIC, declarationEvent("upsert-object-and-nested"));
-
-        await().atMost(Duration.ofMillis(TEST_TIMEOUT))
-                .until(() -> documentExists(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID));
-
-        ObjectNode source = getDocumentSource(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID);
-        ObjectNode data = (ObjectNode) source.get("data");
+        ObjectNode data = upsertNestedDataAndReadBack("upsert-object-and-nested", """
+                "single_object":{"name":"the-name"},
+                "cases":[
+                  {"case_reference":"C-1","control_pattern":{"factual_name":"n1"}},
+                  {"case_reference":"C-2","control_pattern":{"factual_name":"n2"}}
+                ]
+                """);
 
         assertThat(data.get("single_object").isObject()).isTrue();
         assertThat(data.get("single_object").get("name").asText()).isEqualTo("the-name");
@@ -268,6 +251,59 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         assertThat(data.get("cases").get(0).get("case_reference").asText()).isEqualTo("C-1");
         assertThat(data.get("cases").get(0).get("control_pattern").get("factual_name").asText()).isEqualTo("n1");
         assertThat(data.get("cases").get(1).get("case_reference").asText()).isEqualTo("C-2");
+    }
+
+    @Test
+    void upsertWithSingleElementNestedArray_keepsTheFieldAnArray() throws IOException {
+        // A one-element array must stay an array through the whole round trip and must not be
+        // collapsed into a single object, which is what a single-valued data class component would
+        // have forced.
+        ObjectNode data = upsertNestedDataAndReadBack("upsert-single-element-nested", """
+                "single_object":{"name":"the-name"},
+                "cases":[{"case_reference":"C-1","control_pattern":{"factual_name":"n1"}}]
+                """);
+
+        assertThat(data.get("cases").isArray()).isTrue();
+        assertThat(data.get("cases")).hasSize(1);
+        assertThat(data.get("cases").get(0).get("case_reference").asText()).isEqualTo("C-1");
+        assertThat(data.get("cases").get(0).get("control_pattern").get("factual_name").asText()).isEqualTo("n1");
+    }
+
+    @Test
+    void upsertWithEmptyNestedArray_writesAnEmptyArray() throws IOException {
+        // An empty array is a valid payload for a nested field — it must not be turned into null or
+        // dropped, so that a consumer can tell "no cases" apart from "field not indexed".
+        ObjectNode data = upsertNestedDataAndReadBack("upsert-empty-nested", """
+                "single_object":{"name":"the-name"},
+                "cases":[]
+                """);
+
+        assertThat(data.get("cases")).isNotNull();
+        assertThat(data.get("cases").isArray()).isTrue();
+        assertThat(data.get("cases")).isEmpty();
+        assertThat(data.get("single_object").get("name").asText()).isEqualTo("the-name");
+    }
+
+    /**
+     * Stubs the search item response with the given {@code data} body fragment, triggers indexing of
+     * the nested IT index type and returns the {@code data} object as stored in OpenSearch.
+     */
+    private ObjectNode upsertNestedDataAndReadBack(String eventId, String dataFields) throws IOException {
+        wireMock.stubFor(get(urlPathEqualTo("/index-api/searchitems"))
+                .withQueryParam("origin_id", equalTo(ORIGIN_ID))
+                .atPriority(1)
+                .willReturn(aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("index-major-version", "1")
+                        .withHeader("index-minor-version", "0")
+                        .withBody("{\"origin\":{\"id\":\"" + ORIGIN_ID + "\"},\"data\":{" + dataFields + "}}")));
+
+        sendSync(TEST_TOPIC, declarationEvent(eventId));
+
+        await().atMost(Duration.ofMillis(TEST_TIMEOUT))
+                .until(() -> documentExists(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID));
+
+        return (ObjectNode) getDocumentSource(NESTED_INDEX_WRITE_ALIAS, ORIGIN_ID).get("data");
     }
 
     private boolean documentExists(String alias, String docId) {

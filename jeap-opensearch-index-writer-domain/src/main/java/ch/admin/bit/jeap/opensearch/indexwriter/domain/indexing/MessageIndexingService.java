@@ -102,8 +102,6 @@ public class MessageIndexingService {
             T typedData = jsonMapper.convertValue(result.searchItem().data(), dataClass);
             return new SearchItem<>(result.searchItem().origin(), typedData).withMetadata(metadata);
         } catch (IllegalArgumentException | JacksonException e) {
-            // Jackson 3 reports a shape mismatch as JacksonException (a RuntimeException), not as the
-            // IllegalArgumentException that Jackson 2 wrapped conversion failures in
             throw IndexingException.dataDeserializationFailed(dataClass, indexType.originType(), e);
         }
     }
