@@ -26,6 +26,12 @@ class OpenSearchIndexWriterException extends IndexWriterException {
                         .formatted(physicalIndex, indexWriteAlias, physicalIndex, indexWriteAlias), false);
     }
 
+    static OpenSearchIndexWriterException invalidConnectionUrl(String configuredUrl, String reason) {
+        return new OpenSearchIndexWriterException(
+                "Invalid OpenSearch connection URL '%s' configured in 'jeap.opensearch.indexwriter.connection.url': %s."
+                        .formatted(configuredUrl, reason), false);
+    }
+
     static OpenSearchIndexWriterException missingTemplateSettings(String templateName) {
         return new OpenSearchIndexWriterException(
                 "No index template settings configured for '%s'. Add 'jeap.opensearch.indexwriter.index-templates.%s' or a 'jeap.opensearch.indexwriter.index-templates.default' fallback entry."

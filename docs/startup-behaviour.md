@@ -1,5 +1,15 @@
 # Startup behaviour
 
+## Connection URL validation
+
+Before any OpenSearch call is made, `jeap.opensearch.indexwriter.connection.url` is validated while
+the configuration properties are initialized. An invalid URL fails the startup with an error naming
+the property instead of surfacing later as a connection error. A URL without a scheme is interpreted
+as `https`, and `http` is rejected when `signing-region` is set. See the
+[Configuration reference](configuration.md#url-format) for the accepted formats.
+
+## Index operations
+
 On startup, `IndexMappingUpdater` iterates over every registered `IndexTypeDescriptor` and calls
 `ensureIndexReady` for each one. This performs two operations against OpenSearch: creating or
 updating the index template, and validating or updating the mapping on the current write index.

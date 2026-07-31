@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] - 2026-07-31
+
+### Fixed
+- `jeap.opensearch.indexwriter.connection.url` is no longer passed unchanged to the AWS transport, which expects a host name and prefixes it with `https://` itself. A configured URL including its scheme therefore resulted in `UnknownHostException: https` on startup when `signing-region` was set, even though the documented configuration contained the scheme.
+
+### Changed
+- The connection URL is validated when the configuration properties are initialized. A missing URL, an unsupported scheme, credentials, a path, a query or a fragment now fail the startup with an error naming the property. `http` is rejected when `signing-region` is set, as AWS SigV4 signed requests are always sent over `https`.
+- A connection URL without a scheme is interpreted as `https` instead of resulting in an unencrypted connection. Configure `http://` explicitly for a cluster that is reachable without TLS, i.e. a local or test instance.
+
+### Dependencies
+- **ch.admin.bit.jeap:jeap-spring-boot-parent**: 38.0.0 → 38.0.1 (patch)
+
 ## [3.5.0] - 2026-07-29
 
 ### Fixed

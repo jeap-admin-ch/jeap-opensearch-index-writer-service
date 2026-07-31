@@ -6,8 +6,8 @@ All properties of the index writer service live under the `jeap.opensearch.index
 
 | Property                                                | Default | Description                                                                                                                                                                                               |
 |---------------------------------------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `jeap.opensearch.indexwriter.connection.url`            | —       | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com`). Required.                                                                                                         |
-| `jeap.opensearch.indexwriter.connection.signing-region` | —       | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.). Leave blank for non-AWS deployments. |
+| `jeap.opensearch.indexwriter.connection.url`            | —       | URL of the OpenSearch cluster (e.g. `https://my-domain.eu-central-2.es.amazonaws.com` or `https://my-opensearch-host:9200`). Required. A URL without a scheme is interpreted as `https`.                   |
+| `jeap.opensearch.indexwriter.connection.signing-region` | —       | AWS region for SigV4 request signing (e.g. `eu-central-2`). When set, the default AWS credential provider chain is used (ECS task role, EC2 instance profile, etc.) and the URL must use `https`. Leave blank for non-AWS deployments. |
 
 Example for AWS OpenSearch Service (with IAM/SigV4 signing):
 
@@ -29,6 +29,27 @@ jeap:
       connection:
         url: https://my-opensearch-host:9200
 ```
+
+### URL format
+
+The same value works for both deployment modes — the service normalizes it and hands the scheme-less
+host name to the AWS transport, which always connects over `https`.
+
+| Configured value                | Interpreted as                   |
+|---------------------------------|----------------------------------|
+| `https://my-host`               | `https://my-host`                |
+| `https://my-host:9200`          | `https://my-host:9200`           |
+| `my-host` (no scheme)           | `https://my-host`                |
+| `my-host:9200` (no scheme)      | `https://my-host:9200`           |
+| `http://localhost:9200`         | `http://localhost:9200`          |
+
+The URL is validated at startup. Startup fails with an error naming the property if the URL is
+missing, uses a scheme other than `http`/`https`, contains credentials, or contains a path, query or
+fragment. Plain `http` is rejected when `signing-region` is set, because AWS SigV4 signed requests
+are always sent over `https`.
+
+> **Note:** Only configure `http://` explicitly for a cluster that is actually reachable without TLS,
+> such as a local or test instance. Omitting the scheme always results in an encrypted connection.
 
 ## Index template settings
 
@@ -74,6 +95,10 @@ jeap:
 | Property                                                    | Default | Description                                                                       |
 |-------------------------------------------------------------|---------|-----------------------------------------------------------------------------------|
 | `jeap.opensearch.indexwriter.search-item-provider.timeout`  | `30s`   | Connect timeout for the REST client used to call SearchItem Provider endpoints.   |
+
+The provider base URI and the OAuth2 client ID are not configured here — they are part of the message
+configuration. A client ID referenced there must be registered under
+`spring.security.oauth2.client.registration`, see [Message configuration](message-configuration.md).
 
 ## Index rollover
 

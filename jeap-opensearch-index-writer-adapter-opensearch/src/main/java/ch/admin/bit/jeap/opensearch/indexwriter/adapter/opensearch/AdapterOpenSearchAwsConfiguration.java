@@ -32,7 +32,7 @@ public class AdapterOpenSearchAwsConfiguration {
         return new OpenSearchClient(
                 new AwsSdk2Transport(
                         httpClient,
-                        properties.getUrl(),
+                        properties.connectionUrl().hostAndPort(),
                         "es",
                         Region.of(properties.getSigningRegion()),
                         AwsSdk2TransportOptions.builder()

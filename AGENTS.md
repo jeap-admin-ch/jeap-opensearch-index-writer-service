@@ -71,7 +71,7 @@ jeap:
   opensearch:
     indexwriter:
       connection:
-        url: https://my-opensearch:9200
+        url: https://my-opensearch:9200   # scheme optional, defaults to https; validated at startup
       index-templates:
         default:
           number-of-shards: 1
