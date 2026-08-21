@@ -10,6 +10,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Dependencies
 - **ch.admin.bit.jeap:jeap-spring-boot-parent**: 39.5.0 → 40.0.0 (major)
 
+### Changed
+- Install the Avro class whitelist in `KafkaIndexWriterMessageListenerTest`, required by Avro 1.12.2 in tests without a Spring context
+
 ## [4.1.0] - 2026-08-19
 
 ### Dependencies

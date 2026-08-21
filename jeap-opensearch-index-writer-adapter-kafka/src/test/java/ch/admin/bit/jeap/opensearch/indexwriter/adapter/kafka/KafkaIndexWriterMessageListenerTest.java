@@ -5,9 +5,11 @@ import ch.admin.bit.jeap.messaging.avro.AvroMessageKey;
 import ch.admin.bit.jeap.messaging.avro.AvroMessageType;
 import ch.admin.bit.jeap.messaging.avro.errorevent.MessageHandlerException;
 import ch.admin.bit.jeap.messaging.avro.errorevent.MessageHandlerExceptionInformation.Temporality;
+import ch.admin.bit.jeap.messaging.avro.security.AvroClassSecurity;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.exception.IndexWriterException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.MessageIndexingReceiver;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,11 @@ class KafkaIndexWriterMessageListenerTest {
     private Acknowledgment acknowledgment;
 
     private KafkaIndexWriterMessageListener listener;
+
+    @BeforeAll
+    static void installAvroClassSecurity() {
+        AvroClassSecurity.installDefaultIfMissing();
+    }
 
     @BeforeEach
     void setUp() {
