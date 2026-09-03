@@ -183,6 +183,7 @@ Apache License Version 2.0
  * JSpecify annotations - [org.jspecify:jspecify](https://jspecify.dev/)
  * Objenesis - [org.objenesis:objenesis](http://objenesis.org/objenesis)
  * OpenSearch Java Client - [org.opensearch.client:opensearch-java](https://github.com/opensearch-project/opensearch-java/)
+ * OpenSearch Java Client - [org.opensearch.client:opensearch-java](https://github.com/opensearch-project/opensearch-java/)
  * org.opentest4j:opentest4j - [org.opentest4j:opentest4j](https://github.com/ota4j-team/opentest4j)
  * Reflections - [org.reflections:reflections](http://github.com/ronmamo/reflections)
  * Scala Library - [org.scala-lang:scala-library](https://www.scala-lang.org/)
