@@ -60,9 +60,9 @@ The check requires `indices:monitor/settings/get` in addition to the existing ma
 See [OpenSearch permissions](opensearch-permissions.md). The check fails startup on unreadable deployed
 state or incompatible definitions, before changing the template for future rollovers.
 
-On success, the writer combines business analysis with operational settings in the template. New
-physical indices and rollover indices inherit it. Compatible mapping updates still target the current
-physical write index; older rollover partitions are inspected but not rewritten.
+On success, the writer combines the IndexType's native analysis with operational settings in the
+template. New physical indices and rollover indices inherit it. Compatible mapping updates still
+target the current physical write index; older rollover partitions are inspected but not rewritten.
 
 ## Compatibility and migration
 
@@ -81,7 +81,7 @@ necessarily need retokenization, but are treated as a breaking search contract b
 Analysis and mappings are versioned together. Updating a template never reanalyzes existing documents.
 For a breaking change:
 
-1. Use registry plugin 3.19.0 or later and writer 6.0.0 or later.
+1. Use registry plugin 3.19.0 or later and writer 6.2.0 or later.
 2. Publish and deploy a new IndexType major. Its write alias creates a separate physical index.
 3. Backfill/reindex or replay authoritative data, accounting for concurrent writes.
 4. Verify document counts and search behavior.
