@@ -81,7 +81,7 @@ necessarily need retokenization, but are treated as a breaking search contract b
 Analysis and mappings are versioned together. Updating a template never reanalyzes existing documents.
 For a breaking change:
 
-1. Use registry plugin 3.16.0 or later and writer 5.9.0 or later.
+1. Use registry plugin 3.19.0 or later and writer 6.0.0 or later.
 2. Publish and deploy a new IndexType major. Its write alias creates a separate physical index.
 3. Backfill/reindex or replay authoritative data, accounting for concurrent writes.
 4. Verify document counts and search behavior.
