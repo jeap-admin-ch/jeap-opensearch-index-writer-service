@@ -1,5 +1,9 @@
 # Index types
 
+Index definition resources can include native `settings.analysis` alongside `mappings`. See
+[Native analysis and migration](native-analysis.md) for analyzer/normalizer examples, versioning rules,
+and required permissions. Existing mapping-only definitions remain supported.
+
 An `IndexType` describes a business object that is searchable in OpenSearch. It defines the mapping
 (field names, types), the versioning scheme, and the alias names used for reading and writing.
 Index types are defined in separate Maven artifacts and consumed as dependencies by service instances.

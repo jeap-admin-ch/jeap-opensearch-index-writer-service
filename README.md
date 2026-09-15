@@ -13,6 +13,7 @@ the owning domain.
 - **Schema validation:** SearchItem fields validated against the `IndexType` mapping before every write
 - **Managed metadata:** `search_item.upserted_at`, `major_version`, and `minor_version` enriched automatically on every write
 - **Service-owned index templates:** Index templates created and kept up to date by the service at startup
+- **Native analysis:** IndexType-owned analyzers, normalizers, tokenizers, and filters combined with operational settings; deployed compatibility checked before template updates
 - **Error handling:** Failed operations forwarded to the jEAP error handling service
 
 ## Documentation
@@ -22,6 +23,7 @@ the owning domain.
 - [Configuration reference](docs/configuration.md)
 - [Message configuration](docs/message-configuration.md)
 - [Index types](docs/index-types.md)
+- [Native analysis and migration](docs/native-analysis.md)
 - [Startup behaviour](docs/startup-behaviour.md)
 - [Write operations](docs/write-operations.md)
 - [OpenSearch permissions](docs/opensearch-permissions.md)

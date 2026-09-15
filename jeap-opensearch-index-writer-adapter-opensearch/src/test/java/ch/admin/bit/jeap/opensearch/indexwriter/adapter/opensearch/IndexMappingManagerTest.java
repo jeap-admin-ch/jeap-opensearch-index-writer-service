@@ -4,6 +4,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import jakarta.json.JsonNumber;
+import jakarta.json.JsonString;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -79,6 +81,40 @@ class IndexMappingManagerTest {
     private IndexMappingManager indexMappingManager;
 
     // --- parseMappingWithVersion ---
+
+    @Test
+    void parseDefinitionPreservesNativeOptionsAndClosesStream() throws IOException {
+        setupTransportWithMapper();
+        String json = """
+                {"settings":{"analysis":{"filter":{"native_filter":{"type":"plugin_filter","custom_option":42}}}},
+                "mappings":{"dynamic":false,"_meta":{"schema_version":99,"custom":42,"jeap":{"collection_fields":["items","cases"]}},"properties":{}}}
+                """;
+        InputStream stream = org.mockito.Mockito.spy(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)));
+        IndexDefinition definition = indexMappingManager.parseDefinition(INDEX_WRITE_ALIAS, stream, 3);
+        assertThat(definition.analysis().getJsonObject("filter").getJsonObject("native_filter").getInt("custom_option")).isEqualTo(42);
+        Map<String, JsonData> meta = definition.mapping().meta();
+        assertThat(meta.get("schema_version").to(String.class, openSearchClient._transport().jsonpMapper())).isEqualTo("3");
+        assertThat(((JsonNumber) meta.get("custom").toJson()).intValue()).isEqualTo(42);
+        assertThat(meta.get("jeap").toJson().asJsonObject().getJsonArray("collection_fields").getValuesAs(JsonString.class)
+                .stream().map(JsonString::getString)).containsExactly("items", "cases");
+        verify(stream).close();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "{\"settings\":{\"number_of_shards\":2},\"mappings\":{}}",
+            "{\"settings\":{\"analysis\":[]},\"mappings\":{}}",
+            "{\"settings\":{\"analysis\":{\"analyzer\":{\"bad\":true}}},\"mappings\":{}}",
+            "{\"settings\":{\"analysis\":{\"accentInsensitive\":true}},\"mappings\":{}}",
+            "{\"aliases\":{},\"mappings\":{}}",
+            "{\"settings\":{}}"
+    })
+    void parseDefinitionRejectsUnsupportedEnvelope(String definition) {
+        setupTransportWithMapper();
+        assertThatThrownBy(() -> indexMappingManager.parseDefinition(INDEX_WRITE_ALIAS,
+                new ByteArrayInputStream(definition.getBytes(StandardCharsets.UTF_8)), 0))
+                .isInstanceOf(OpenSearchIndexWriterException.class).hasMessageContaining(INDEX_WRITE_ALIAS);
+    }
 
     @Test
     void parseMappingWithVersion_throwsEmptyMappingException_whenInputStreamIsEmpty() {

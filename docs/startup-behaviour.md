@@ -16,9 +16,15 @@ updating the index template, and validating or updating the mapping on the curre
 
 ## 1. Index template
 
-The service **creates and manages the index template itself**. On every startup it unconditionally
+For each IndexType, before mutating its template or mapping, the writer checks deployed physical-index
+analysis and field assignments against the requested definition. It rejects incompatible analysis and
+mapping version downgrades for that IndexType. IndexTypes are processed independently and sequentially;
+a later failure does not roll back changes already applied to an earlier IndexType. This requires
+settings-read permission; see [Native analysis](native-analysis.md).
+
+The service **creates and manages the index template itself**. After compatibility checks, on every startup it
 applies the template via `PUT`, creating it if it does not exist or overwriting it if it does. The
-template always contains the current mapping, the configured shard/replica/refresh settings, the
+template always contains the current mapping, optional IndexType-owned native analysis, the configured shard/replica/refresh settings, the
 read alias, and the ISM rollover alias setting.
 
 The template name is derived from the write alias by stripping the `_write` suffix:
@@ -42,8 +48,8 @@ falling back to the `default` entry. If neither is present, startup fails with a
 > **Settings changes and existing partitions:** Changes to `number-of-shards`,
 > `number-of-replicas`, and `refresh-interval` are written to the template on every startup but
 > only take effect for new partitions created by ISM rollover. Existing partitions are not affected.
-> The mapping, by contrast, is applied to both the template and all existing physical indices
-> immediately on startup.
+> Compatible mapping changes are applied to the template and current physical write index on startup.
+> Older rollover partitions are checked for analysis compatibility but their mappings are not updated.
 
 ## 2. Index mapping on existing physical indices
 

@@ -74,6 +74,9 @@ class OpenSearchIndexWriterTest {
     @Mock
     private IndexMappingManager indexMappingManager;
 
+    @Mock
+    private IndexAnalysisCompatibility indexAnalysisCompatibility;
+
     @InjectMocks
     private OpenSearchIndexWriter indexWriter;
 
@@ -81,7 +84,7 @@ class OpenSearchIndexWriterTest {
 
     @Test
     void ensureIndexReady_throwsException_whenOpenSearchFails() {
-        when(indexMappingManager.parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
+        when(indexMappingManager.parseDefinition(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
                 .thenThrow(OpenSearchIndexWriterException.mappingParseFailed(INDEX_WRITE_ALIAS, new IOException("Connection refused")));
 
         assertThatThrownBy(() -> indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON), TEMPLATE_SETTINGS))
@@ -91,7 +94,7 @@ class OpenSearchIndexWriterTest {
 
     @Test
     void ensureIndexReady_logsOpenSearchErrorDetails_whenOpenSearchExceptionThrown() throws IOException {
-        when(indexMappingManager.parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
+        when(indexMappingManager.parseDefinition(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
                 .thenThrow(securityException());
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
@@ -112,15 +115,18 @@ class OpenSearchIndexWriterTest {
     @Test
     void ensureIndexReady_delegatesToManagersInOrder() throws IOException {
         TypeMapping typeMapping = mock(TypeMapping.class);
-        when(indexMappingManager.parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
-                .thenReturn(typeMapping);
+        IndexDefinition definition = new IndexDefinition(typeMapping, jakarta.json.JsonValue.EMPTY_JSON_OBJECT, jakarta.json.JsonValue.EMPTY_JSON_OBJECT);
+        when(indexMappingManager.parseDefinition(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
+                .thenReturn(definition);
 
         indexWriter.ensureIndexReady(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, () -> mappingStream(MAPPING_JSON), TEMPLATE_SETTINGS);
 
-        verify(indexMappingManager).parseMappingWithVersion(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION));
-        verify(indexTemplateManager).ensureIndexTemplateUpToDate(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, typeMapping, TEMPLATE_SETTINGS);
-        verify(physicalIndexManager).ensureWriteIndexExists(INDEX_WRITE_ALIAS);
-        verify(indexMappingManager).ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, typeMapping);
+        var order = org.mockito.Mockito.inOrder(indexMappingManager, indexAnalysisCompatibility, indexTemplateManager, physicalIndexManager);
+        order.verify(indexMappingManager).parseDefinition(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION));
+        order.verify(indexAnalysisCompatibility).ensureCompatible(INDEX_WRITE_ALIAS, definition, MINOR_VERSION);
+        order.verify(indexTemplateManager).ensureIndexTemplateUpToDate(INDEX_WRITE_ALIAS, INDEX_READ_ALIAS, MINOR_VERSION, typeMapping, TEMPLATE_SETTINGS, definition.analysis());
+        order.verify(physicalIndexManager).ensureWriteIndexExists(INDEX_WRITE_ALIAS);
+        order.verify(indexMappingManager).ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, typeMapping);
     }
 
     // --- upsertSearchItem ---

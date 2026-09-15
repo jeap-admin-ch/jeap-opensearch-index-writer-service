@@ -56,6 +56,16 @@ class OpenSearchIndexWriterException extends IndexWriterException {
         return new OpenSearchIndexWriterException("Failed to parse mapping for alias '%s'".formatted(indexWriteAlias), false, cause);
     }
 
+    static OpenSearchIndexWriterException incompatibleAnalysis(String index, String detail) {
+        return new OpenSearchIndexWriterException(
+                "Incompatible index definition for '%s': %s. Create a new IndexType major version and migrate/reindex before changing analysis."
+                        .formatted(index, detail), false);
+    }
+
+    static OpenSearchIndexWriterException analysisCheckFailed(String alias, Throwable cause) {
+        return new OpenSearchIndexWriterException("Failed to check deployed analysis for alias '%s'".formatted(alias), false, cause);
+    }
+
     static OpenSearchIndexWriterException mappingUpdateFailed(String indexWriteAlias, Throwable cause) {
         return new OpenSearchIndexWriterException("Failed to update mapping for alias '%s'".formatted(indexWriteAlias), false, cause);
     }

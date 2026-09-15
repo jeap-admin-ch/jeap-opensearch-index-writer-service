@@ -7,6 +7,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [6.0.0] - 2026-09-13
 
+### Added
+- Apply native IndexType analysis to templates and reject incompatible deployed analysis before mutating that IndexType; requires `indices:monitor/settings/get` permission.
+
 ### Dependencies
 - **ch.admin.bit.jeap:jeap-spring-boot-parent**: 40.11.0 → 41.1.0 (major)
 
