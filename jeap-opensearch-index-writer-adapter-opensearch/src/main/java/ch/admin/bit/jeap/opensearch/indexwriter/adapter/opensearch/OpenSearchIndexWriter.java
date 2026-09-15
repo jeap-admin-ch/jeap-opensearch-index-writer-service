@@ -26,13 +26,16 @@ public class OpenSearchIndexWriter implements IndexWriter {
     private final IndexTemplateManager indexTemplateManager;
     private final PhysicalIndexManager physicalIndexManager;
     private final IndexMappingManager indexMappingManager;
+    private final IndexAnalysisCompatibility indexAnalysisCompatibility;
 
     @Override
     public void ensureIndexReady(String indexWriteAlias, String indexReadAlias, int minorVersion, Supplier<InputStream> mappingDefinition, IndexTemplateSettings templateSettings) {
         log.debug("Ensuring index, template and mapping are ready for index '{}', minor version: {}", indexWriteAlias, minorVersion);
         try {
-            TypeMapping typeMapping = indexMappingManager.parseMappingWithVersion(indexWriteAlias, mappingDefinition.get(), minorVersion);
-            indexTemplateManager.ensureIndexTemplateUpToDate(indexWriteAlias, indexReadAlias, minorVersion, typeMapping, templateSettings);
+            IndexDefinition definition = indexMappingManager.parseDefinition(indexWriteAlias, mappingDefinition.get(), minorVersion);
+            indexAnalysisCompatibility.ensureCompatible(indexWriteAlias, definition, minorVersion);
+            TypeMapping typeMapping = definition.mapping();
+            indexTemplateManager.ensureIndexTemplateUpToDate(indexWriteAlias, indexReadAlias, minorVersion, typeMapping, templateSettings, definition.analysis());
             physicalIndexManager.ensureWriteIndexExists(indexWriteAlias);
             indexMappingManager.ensureMappingUpToDate(indexWriteAlias, minorVersion, typeMapping);
         } catch (OpenSearchException e) {

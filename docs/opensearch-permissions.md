@@ -23,6 +23,7 @@ index patterns without needing per-index configuration.
 | `indices:admin/aliases/exists` | Check whether an alias exists before creating the initial index.             |
 | `indices:admin/aliases/get`    | Resolve which physical indices are behind a write alias.                     |
 | `indices:admin/mappings/get`   | Read the current mapping of a physical index to check the schema version.    |
+| `indices:monitor/settings/get` | Read physical-index analysis settings before template or mapping changes. |
 | `indices:admin/mapping/put`    | Update the mapping of a physical index when a new minor version is detected. |
 | `indices:data/write/bulk*`     | Write documents via the bulk API (wildcard form).                            |
 | `indices:data/write/bulk`      | Write documents via the bulk API.                                            |
@@ -48,6 +49,7 @@ index patterns without needing per-index configuration.
         "indices:admin/aliases",
         "indices:admin/aliases/get",
         "indices:admin/mappings/get",
+        "indices:monitor/settings/get",
         "indices:admin/mapping/put",
         "indices:data/write/bulk*",
         "indices:data/write/bulk",

@@ -1,5 +1,8 @@
 # Configuration reference
 
+Business analysis is configured in each IndexType's native `settings.analysis`, not in application
+properties. Operational index settings remain configured here. See [Native analysis](native-analysis.md).
+
 All properties of the index writer service live under the `jeap.opensearch.indexwriter` prefix.
 
 ## OpenSearch connection

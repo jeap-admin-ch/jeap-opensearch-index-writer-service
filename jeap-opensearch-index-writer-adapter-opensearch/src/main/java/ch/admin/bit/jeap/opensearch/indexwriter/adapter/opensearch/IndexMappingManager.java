@@ -38,10 +38,17 @@ class IndexMappingManager {
     private final DataFieldValidator dataFieldValidator;
 
     TypeMapping parseMappingWithVersion(String indexWriteAlias, InputStream inputStream, int minorVersion) {
+        return parseDefinition(indexWriteAlias, inputStream, minorVersion).mapping();
+    }
+
+    IndexDefinition parseDefinition(String indexWriteAlias, InputStream inputStream, int minorVersion) {
         @SuppressWarnings("resource")
         JsonpMapper jsonpMapper = openSearchClient._transport().jsonpMapper();
         byte[] bytes;
-        try {
+        if (inputStream == null) {
+            throw OpenSearchIndexWriterException.emptyMapping(indexWriteAlias);
+        }
+        try (inputStream) {
             bytes = inputStream.readAllBytes();
         } catch (IOException e) {
             throw OpenSearchIndexWriterException.mappingParseFailed(indexWriteAlias, e);
@@ -54,6 +61,7 @@ class IndexMappingManager {
         // as the JacksonJsonProvider from the mapper does not support createReader/createWriter.
         try (var reader = Json.createReader(new ByteArrayInputStream(bytes))) {
             JsonObject root = reader.readObject();
+            JsonObject analysis = IndexAnalysisCompatibility.readAnalysis(root);
             JsonObject mappings = root.getJsonObject(MAPPINGS_JSON_KEY);
             dataFieldValidator.cacheMapping(indexWriteAlias, mappings);
 
@@ -77,8 +85,10 @@ class IndexMappingManager {
             }
 
             try (var parser = Json.createParser(new ByteArrayInputStream(baos.toByteArray()))) {
-                return TypeMapping._DESERIALIZER.deserialize(parser, jsonpMapper);
+                return new IndexDefinition(TypeMapping._DESERIALIZER.deserialize(parser, jsonpMapper), mappings, analysis);
             }
+        } catch (IllegalArgumentException | jakarta.json.JsonException | ClassCastException e) {
+            throw OpenSearchIndexWriterException.mappingParseFailed(indexWriteAlias, e);
         }
     }
 

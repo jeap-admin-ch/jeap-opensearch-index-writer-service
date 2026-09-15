@@ -37,10 +37,124 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static tools.jackson.databind.cfg.DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS;
 
 @Testcontainers
 class OpenSearchIndexWriterIT {
+
+    private static final String ANALYSIS_JSON = """
+            {
+              "settings":{"analysis":{
+                "analyzer":{"folding_analyzer":{"type":"custom","tokenizer":"standard","filter":["lowercase","asciifolding"]},
+                            "configured":{"type":"custom","tokenizer":"words","filter":["length_limit"],"char_filter":["symbols"]}},
+                "normalizer":{"folding_normalizer":{"type":"custom","filter":["lowercase","asciifolding"]}},
+                "tokenizer":{"words":{"type":"pattern","pattern":"\\\\W+"}},
+                "filter":{"length_limit":{"type":"length","min":2,"max":100}},
+                "char_filter":{"symbols":{"type":"mapping","mappings":["& => and"]}}
+              }},
+              "mappings":{"dynamic":false,"properties":{"data":{"properties":{
+                "name":{"type":"text","analyzer":"folding_analyzer"},
+                "code":{"type":"keyword","normalizer":"folding_normalizer"},
+                "description":{"type":"text","analyzer":"configured"}
+              }}}}
+            }
+            """;
+
+    @Test
+    void nativeAnalysisSupportsSearchRestartMinorUpdateAndRollover() throws Exception {
+        String alias = "folding_v1_write";
+        ensureDefinition(alias, 0, ANALYSIS_JSON);
+        indexWriter.upsertSearchItem(alias, "folded", buildSearchItemWithData(
+                Map.of("name", "Café Müller", "code", "ÉCOLE", "description", "foo & bar")));
+        client.indices().refresh(r -> r.index(alias));
+
+        var result = client.search(r -> r.index(alias)
+                .query(q -> q.match(m -> m.field("data.name").query(v -> v.stringValue("cafe muller")))), JsonData.class);
+        assertThat(result.hits().hits()).hasSize(1);
+        assertThat(result.hits().hits().getFirst().source().toJson().asJsonObject().getJsonObject("data").getString("name"))
+                .isEqualTo("Café Müller");
+        assertThat(client.indices().analyze(r -> r.index(alias).analyzer("folding_analyzer").text("Café Müller"))
+                .tokens()).extracting(t -> t.token()).containsExactly("cafe", "muller");
+        assertThat(client.indices().analyze(r -> r.index(alias).normalizer("folding_normalizer").text("ÉCOLE"))
+                .tokens()).extracting(t -> t.token()).containsExactly("ecole");
+        assertThat(client.indices().analyze(r -> r.index(alias).analyzer("configured").text("foo & bar"))
+                .tokens()).extracting(t -> t.token()).containsExactly("foo", "and", "bar");
+
+        ensureDefinition(alias, 0, ANALYSIS_JSON);
+        String minor = ANALYSIS_JSON.replace("\"name\":{", "\"additional\":{\"type\":\"text\",\"analyzer\":\"folding_analyzer\"},\"name\":{");
+        ensureDefinition(alias, 1, minor);
+        assertThat(httpGet(openSearchUrl + "/folding_v1-000001/_mapping")).contains("additional");
+        assertThat(client.indices().rollover(r -> r.alias(alias)).rolledOver()).isTrue();
+        assertThat(httpGet(openSearchUrl + "/folding_v1-000002/_settings")).contains("folding_analyzer", "folding_normalizer", "length_limit");
+        ensureDefinition(alias, 1, minor);
+        assertThat(client.indices().analyze(r -> r.index("folding_v1-000002").analyzer("folding_analyzer").text("Café Müller"))
+                .tokens()).extracting(t -> t.token()).containsExactly("cafe", "muller");
+    }
+
+    @Test
+    void incompatibleAnalysisFailsBeforeTemplateMutationAndMajorCreatesNewIndex() throws Exception {
+        String alias = "compatibility_v1_write";
+        ensureDefinition(alias, 0, ANALYSIS_JSON);
+        String template = httpGet(openSearchUrl + "/_index_template/compatibility_v1");
+        String changed = ANALYSIS_JSON.replace("\"lowercase\",\"asciifolding\"", "\"lowercase\"");
+        assertThatThrownBy(() -> ensureDefinition(alias, 1, changed))
+                .isInstanceOf(OpenSearchIndexWriterException.class).hasMessageContaining("new IndexType major");
+        assertThat(httpGet(openSearchUrl + "/_index_template/compatibility_v1")).isEqualTo(template);
+        assertThatThrownBy(() -> ensureDefinition(alias, 0, changed))
+                .hasMessageContaining("settings.analysis");
+        String reassigned = ANALYSIS_JSON.replace("\"analyzer\":\"folding_analyzer\"", "\"analyzer\":\"standard\"");
+        assertThatThrownBy(() -> ensureDefinition(alias, 1, reassigned)).hasMessageContaining("name.analyzer");
+        assertThat(httpGet(openSearchUrl + "/_index_template/compatibility_v1")).isEqualTo(template);
+        ensureDefinition("compatibility_v2_write", 0, changed);
+        assertThat(client.indices().exists(r -> r.index("compatibility_v2-000001")).value()).isTrue();
+    }
+
+    @Test
+    void legacyIndicesCannotSilentlyAcquireAnalysis() throws Exception {
+        ensureDefinition("legacy_v1_write", 0, MAPPING_JSON);
+        assertThatThrownBy(() -> ensureDefinition("legacy_v1_write", 1, ANALYSIS_JSON))
+                .hasMessageContaining("settings.analysis");
+    }
+
+    @Test
+    void explicitDefaultSearchAnalyzersSurviveRestart() {
+        String definition = ANALYSIS_JSON.replace("\"name\":{\"type\":\"text\",\"analyzer\":\"folding_analyzer\"}",
+                "\"name\":{\"type\":\"text\",\"analyzer\":\"folding_analyzer\",\"search_analyzer\":\"folding_analyzer\",\"search_quote_analyzer\":\"folding_analyzer\"}");
+        ensureDefinition("explicit_search_v1_write", 0, definition);
+        ensureDefinition("explicit_search_v1_write", 0, definition);
+        String implicit = """
+                {"mappings":{"dynamic":false,"properties":{"name":{"type":"text","search_analyzer":"standard"}}}}
+                """;
+        ensureDefinition("implicit_search_v1_write", 0, implicit);
+        ensureDefinition("implicit_search_v1_write", 0, implicit);
+    }
+
+    @Test
+    void addingNativeAnalysisToAnOpenIndexRequiresLifecycleChange() throws Exception {
+        client.indices().create(r -> r.index("analysis_spike"));
+        var request = HttpRequest.newBuilder(URI.create(openSearchUrl + "/analysis_spike/_settings"))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString("""
+                        {"analysis":{"analyzer":{"new_analyzer":{"type":"custom","tokenizer":"standard"}},
+                                     "normalizer":{"new_normalizer":{"type":"custom","filter":["lowercase"]}}}}
+                        """)).build();
+        var response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("non dynamic settings", "open indices");
+    }
+
+    @Test
+    void unknownAnalyzerReferenceIsRejectedByOpenSearch() {
+        assertThatThrownBy(() -> ensureDefinition("invalid_analysis_v1_write", 0,
+                ANALYSIS_JSON.replace("\"analyzer\":\"folding_analyzer\"", "\"analyzer\":\"missing_analyzer\"")))
+                .isInstanceOf(OpenSearchIndexWriterException.class);
+    }
+
+    private void ensureDefinition(String alias, int minor, String definition) {
+        indexWriter.ensureIndexReady(alias, "analysis_read", minor,
+                () -> new ByteArrayInputStream(definition.getBytes(StandardCharsets.UTF_8)), new IndexTemplateSettings(1, 0, "1s"));
+    }
 
     private static final String INDEX_WRITE_ALIAS = "orders_v1_write";
     private static final String INDEX_READ_ALIAS = "orders_read";
@@ -55,6 +169,11 @@ class OpenSearchIndexWriterIT {
             {
               "mappings": {
                 "dynamic": false,
+                "_meta": {
+                  "schema_version": 99,
+                  "custom": 42,
+                  "jeap": { "collection_fields": ["order_id"] }
+                },
                 "properties": {
                   "order_id": { "type": "keyword" }
                 }
@@ -94,7 +213,8 @@ class OpenSearchIndexWriterIT {
         IndexTemplateManager indexTemplateManager = new IndexTemplateManager(client);
         PhysicalIndexManager physicalIndexManager = new PhysicalIndexManager(client);
         IndexMappingManager indexMappingManager = new IndexMappingManager(client, dataFieldValidator);
-        indexWriter = new OpenSearchIndexWriter(client, dataFieldValidator, indexTemplateManager, physicalIndexManager, indexMappingManager);
+        indexWriter = new OpenSearchIndexWriter(client, dataFieldValidator, indexTemplateManager, physicalIndexManager, indexMappingManager,
+                new IndexAnalysisCompatibility(client));
 
         // Service creates the template and initial physical index (000001) on first ensureIndexReady call.
         // Mapping with dynamic: false is applied immediately so OpenSearch does not auto-map data fields.
@@ -157,7 +277,11 @@ class OpenSearchIndexWriterIT {
                         },
                         "mappings" : {
                           "_meta" : {
-                            "schema_version" : "3"
+                            "schema_version" : "3",
+                            "custom" : 42,
+                            "jeap" : {
+                              "collection_fields" : [ "order_id" ]
+                            }
                           },
                           "dynamic" : "false",
                           "properties" : {
@@ -189,7 +313,11 @@ class OpenSearchIndexWriterIT {
                     "mappings" : {
                       "dynamic" : "false",
                       "_meta" : {
-                        "schema_version" : "3"
+                        "schema_version" : "3",
+                        "custom" : 42,
+                        "jeap" : {
+                          "collection_fields" : [ "order_id" ]
+                        }
                       },
                       "properties" : {
                         "order_id" : {
