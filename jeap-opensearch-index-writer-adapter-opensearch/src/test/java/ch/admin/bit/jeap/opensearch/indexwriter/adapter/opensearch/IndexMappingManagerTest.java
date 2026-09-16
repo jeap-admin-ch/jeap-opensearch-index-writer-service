@@ -111,8 +111,9 @@ class IndexMappingManagerTest {
     })
     void parseDefinitionRejectsUnsupportedEnvelope(String definition) {
         setupTransportWithMapper();
-        assertThatThrownBy(() -> indexMappingManager.parseDefinition(INDEX_WRITE_ALIAS,
-                new ByteArrayInputStream(definition.getBytes(StandardCharsets.UTF_8)), 0))
+        InputStream definitionStream = new ByteArrayInputStream(definition.getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> indexMappingManager.parseDefinition(INDEX_WRITE_ALIAS, definitionStream, 0))
                 .isInstanceOf(OpenSearchIndexWriterException.class).hasMessageContaining(INDEX_WRITE_ALIAS);
     }
 
@@ -120,14 +121,15 @@ class IndexMappingManagerTest {
     void parseMappingWithVersion_throwsEmptyMappingException_whenInputStreamIsEmpty() {
         when(openSearchClient._transport()).thenReturn(transport);
         when(transport.jsonpMapper()).thenReturn(new JacksonJsonpMapper());
+        InputStream emptyStream = InputStream.nullInputStream();
 
-        assertThatThrownBy(() -> indexMappingManager.parseMappingWithVersion(INDEX_WRITE_ALIAS, InputStream.nullInputStream(), MINOR_VERSION))
+        assertThatThrownBy(() -> indexMappingManager.parseMappingWithVersion(INDEX_WRITE_ALIAS, emptyStream, MINOR_VERSION))
                 .isInstanceOf(OpenSearchIndexWriterException.class)
                 .hasMessageContaining(INDEX_WRITE_ALIAS);
     }
 
     @Test
-    void parseMappingWithVersion_injectsSchemaVersionIntoMeta() throws IOException {
+    void parseMappingWithVersion_injectsSchemaVersionIntoMeta() {
         setupTransportWithMapper();
 
         TypeMapping result = indexMappingManager.parseMappingWithVersion(INDEX_WRITE_ALIAS, mappingStream(MAPPING_JSON), MINOR_VERSION);
@@ -327,7 +329,6 @@ class IndexMappingManagerTest {
         setupMappingForIndex(PHYSICAL_INDEX, outdatedMapping);
         when(indicesClient.putMapping(any(PutMappingRequest.class))).thenThrow(securityException());
 
-        TypeMapping mapping = mock(TypeMapping.class);
         assertThatThrownBy(() -> indexMappingManager.ensureMappingUpToDate(INDEX_WRITE_ALIAS, MINOR_VERSION, outdatedMapping))
                 .isInstanceOf(OpenSearchException.class);
     }
@@ -365,10 +366,10 @@ class IndexMappingManagerTest {
     }
 
     private void setupMappingForIndex(String indexName, TypeMapping typeMapping) throws IOException {
-        IndexMappingRecord record = mock(IndexMappingRecord.class);
-        when(record.mappings()).thenReturn(typeMapping);
+        IndexMappingRecord mappingRecord = mock(IndexMappingRecord.class);
+        when(mappingRecord.mappings()).thenReturn(typeMapping);
         GetMappingResponse mappingResponse = mock(GetMappingResponse.class);
-        when(mappingResponse.result()).thenReturn(Map.of(indexName, record));
+        when(mappingResponse.result()).thenReturn(Map.of(indexName, mappingRecord));
         when(indicesClient.getMapping(any(GetMappingRequest.class))).thenReturn(mappingResponse);
     }
 

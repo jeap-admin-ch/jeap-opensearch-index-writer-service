@@ -20,20 +20,28 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 class IndexAnalysisCompatibility {
-    private static final Set<String> COMPONENTS = Set.of("analyzer", "normalizer", "tokenizer", "filter", "char_filter");
-    private static final List<String> PARAMETERS = List.of("analyzer", "normalizer", "search_analyzer", "search_quote_analyzer");
+    private static final String ANALYSIS = "analysis";
+    private static final String ANALYZER = "analyzer";
+    private static final String DEFAULT = "default";
+    private static final String MAPPINGS = "mappings";
+    private static final String NORMALIZER = "normalizer";
+    private static final String SEARCH_ANALYZER = "search_analyzer";
+    private static final String SEARCH_QUOTE_ANALYZER = "search_quote_analyzer";
+    private static final String SETTINGS = "settings";
+    private static final Set<String> COMPONENTS = Set.of(ANALYZER, NORMALIZER, "tokenizer", "filter", "char_filter");
+    private static final List<String> PARAMETERS = List.of(ANALYZER, NORMALIZER, SEARCH_ANALYZER, SEARCH_QUOTE_ANALYZER);
 
     private final OpenSearchClient client;
 
     static JsonObject readAnalysis(JsonObject root) {
-        if (!Set.of("mappings", "settings").containsAll(root.keySet()) || !(root.get("mappings") instanceof JsonObject)) {
+        if (!Set.of(MAPPINGS, SETTINGS).containsAll(root.keySet()) || !(root.get(MAPPINGS) instanceof JsonObject)) {
             throw new IllegalArgumentException("Index definition must contain mappings and only optional settings.analysis");
         }
-        JsonObject settings = object(root, "settings");
-        if (!Set.of("analysis").containsAll(settings.keySet())) {
+        JsonObject settings = object(root, SETTINGS);
+        if (!Set.of(ANALYSIS).containsAll(settings.keySet())) {
             throw new IllegalArgumentException("Only settings.analysis belongs to the IndexType; operational settings belong to the writer");
         }
-        JsonObject analysis = object(settings, "analysis");
+        JsonObject analysis = object(settings, ANALYSIS);
         if (!COMPONENTS.containsAll(analysis.keySet())) {
             throw new IllegalArgumentException("Unsupported analysis section");
         }
@@ -53,20 +61,20 @@ class IndexAnalysisCompatibility {
             }
             JsonObject mappings = get(pattern, "_mapping");
             for (String index : settings.keySet()) {
-                JsonObject installed = object(object(object(settings, index), "settings"), "index");
-                if (!normalizedAnalysis(object(installed, "analysis")).equals(normalizedAnalysis(desired.analysis()))) {
+                JsonObject installed = object(object(object(settings, index), SETTINGS), "index");
+                if (!normalizedAnalysis(object(installed, ANALYSIS)).equals(normalizedAnalysis(desired.analysis()))) {
                     throw OpenSearchIndexWriterException.incompatibleAnalysis(index, "settings.analysis differs from the physical index");
                 }
                 if (!mappings.containsKey(index)) {
                     throw new IOException("Missing mapping response for " + index);
                 }
-                JsonObject existingMapping = object(object(mappings, index), "mappings");
+                JsonObject existingMapping = object(object(mappings, index), MAPPINGS);
                 JsonValue version = object(existingMapping, "_meta").get("schema_version");
                 if (version != null && Integer.parseInt(scalar(version)) > minorVersion) {
                     throw OpenSearchIndexWriterException.incompatibleAnalysis(index, "mapping version downgrade is not supported");
                 }
-                String defaultAnalyzer = object(desired.analysis(), "analyzer").containsKey("default") ? "default" : "standard";
-                compareFields(index, existingMapping, desired.mappings(), "mappings", defaultAnalyzer);
+                String defaultAnalyzer = object(desired.analysis(), ANALYZER).containsKey(DEFAULT) ? DEFAULT : "standard";
+                compareFields(index, existingMapping, desired.mappings(), MAPPINGS, defaultAnalyzer);
             }
         } catch (IOException | IllegalArgumentException | JsonException e) {
             throw OpenSearchIndexWriterException.analysisCheckFailed(alias, e);
@@ -108,12 +116,12 @@ class IndexAnalysisCompatibility {
     private static JsonValue analysisParameter(JsonObject field, String parameter, String defaultAnalyzer) {
         // OpenSearch omits search analyzers that equal their fallback when returning mappings.
         JsonValue value = switch (parameter) {
-            case "analyzer" -> field.getOrDefault(parameter, Json.createValue(defaultAnalyzer));
-            case "search_analyzer" -> field.getOrDefault(parameter, analysisParameter(field, "analyzer", defaultAnalyzer));
-            case "search_quote_analyzer" -> field.getOrDefault(parameter, analysisParameter(field, "search_analyzer", defaultAnalyzer));
+            case ANALYZER -> field.getOrDefault(parameter, Json.createValue(defaultAnalyzer));
+            case SEARCH_ANALYZER -> field.getOrDefault(parameter, analysisParameter(field, ANALYZER, defaultAnalyzer));
+            case SEARCH_QUOTE_ANALYZER -> field.getOrDefault(parameter, analysisParameter(field, SEARCH_ANALYZER, defaultAnalyzer));
             default -> field.get(parameter);
         };
-        if (!"normalizer".equals(parameter) && value instanceof JsonString string && "default".equals(string.getString())) {
+        if (!NORMALIZER.equals(parameter) && value instanceof JsonString string && DEFAULT.equals(string.getString())) {
             return Json.createValue(defaultAnalyzer);
         }
         return value;

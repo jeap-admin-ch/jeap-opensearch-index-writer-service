@@ -93,7 +93,7 @@ class OpenSearchIndexWriterTest {
     }
 
     @Test
-    void ensureIndexReady_logsOpenSearchErrorDetails_whenOpenSearchExceptionThrown() throws IOException {
+    void ensureIndexReady_logsOpenSearchErrorDetails_whenOpenSearchExceptionThrown() {
         when(indexMappingManager.parseDefinition(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
                 .thenThrow(securityException());
 
@@ -113,7 +113,7 @@ class OpenSearchIndexWriterTest {
     }
 
     @Test
-    void ensureIndexReady_delegatesToManagersInOrder() throws IOException {
+    void ensureIndexReady_delegatesToManagersInOrder() {
         TypeMapping typeMapping = mock(TypeMapping.class);
         IndexDefinition definition = new IndexDefinition(typeMapping, jakarta.json.JsonValue.EMPTY_JSON_OBJECT, jakarta.json.JsonValue.EMPTY_JSON_OBJECT);
         when(indexMappingManager.parseDefinition(eq(INDEX_WRITE_ALIAS), any(InputStream.class), eq(MINOR_VERSION)))
@@ -149,8 +149,9 @@ class OpenSearchIndexWriterTest {
     @SuppressWarnings("unchecked")
     void upsertSearchItem_throwsException_whenOpenSearchFails() throws IOException {
         when(openSearchClient.index(any(IndexRequest.class))).thenThrow(new IOException("write error"));
+        SearchItemIndexed<String> searchItem = buildSearchItem();
 
-        assertThatThrownBy(() -> indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, "doc-123", buildSearchItem()))
+        assertThatThrownBy(() -> indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, "doc-123", searchItem))
                 .isInstanceOf(OpenSearchIndexWriterException.class)
                 .hasMessageContaining(INDEX_WRITE_ALIAS);
     }
@@ -161,8 +162,9 @@ class OpenSearchIndexWriterTest {
         when(openSearchClient.index(any(IndexRequest.class))).thenThrow(securityException());
 
         ListAppender<ILoggingEvent> logs = attachLogAppender();
+        SearchItemIndexed<String> searchItem = buildSearchItem();
 
-        assertThatThrownBy(() -> indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, "doc-123", buildSearchItem()))
+        assertThatThrownBy(() -> indexWriter.upsertSearchItem(INDEX_WRITE_ALIAS, "doc-123", searchItem))
                 .isInstanceOf(OpenSearchIndexWriterException.class);
 
         assertThat(logs.list)
@@ -226,13 +228,6 @@ class OpenSearchIndexWriterTest {
     private static SearchItemIndexed<String> buildSearchItem() {
         Origin origin = new Origin("id-1", "1", null, null, Instant.now(), Instant.now(), null);
         SearchItem<String> base = new SearchItem<>(origin, "data");
-        SearchItemMetadata meta = SearchItemMetadata.initial(MAJOR_VERSION, MINOR_VERSION);
-        return SearchItemIndexed.of(base, meta);
-    }
-
-    private static <T> SearchItemIndexed<T> buildSearchItemWithData(T data) {
-        Origin origin = new Origin("id-1", "1", null, null, Instant.now(), Instant.now(), null);
-        SearchItem<T> base = new SearchItem<>(origin, data);
         SearchItemMetadata meta = SearchItemMetadata.initial(MAJOR_VERSION, MINOR_VERSION);
         return SearchItemIndexed.of(base, meta);
     }

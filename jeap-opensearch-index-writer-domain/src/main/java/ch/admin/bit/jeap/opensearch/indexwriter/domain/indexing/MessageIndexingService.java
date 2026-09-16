@@ -6,6 +6,7 @@ import ch.admin.bit.jeap.opensearch.indextype.SearchItem;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemMetadata;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indextype.IndexTypeRepository;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.IndexOperation;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.message.MessageOperationConfig;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.OriginReference;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.reference.ReferenceProvider;
@@ -73,9 +74,10 @@ public class MessageIndexingService {
         IndexType<?> indexType = indexTypeRepository.findByOriginTypeAndMajorVersion(operation.indexType(), searchItemResult.indexMajorVersion())
                 .orElseThrow(() -> IndexingException.indexTypeNotFound(operation.indexType(), searchItemResult.indexMajorVersion()));
 
-        switch (operation.indexOperation()) {
-            case UPSERT -> upsert(indexType, originReference, searchItemResult);
-            case DELETE -> indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id());
+        if (operation.indexOperation() == IndexOperation.UPSERT) {
+            upsert(indexType, originReference, searchItemResult);
+        } else {
+            indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id());
         }
     }
 

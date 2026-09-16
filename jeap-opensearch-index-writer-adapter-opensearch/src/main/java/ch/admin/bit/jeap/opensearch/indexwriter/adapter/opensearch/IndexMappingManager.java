@@ -163,11 +163,11 @@ class IndexMappingManager {
                 .index(indexName)
                 .build();
         GetMappingResponse response = openSearchClient.indices().getMapping(getMappingRequest);
-        IndexMappingRecord record = response.result().get(indexName);
-        if (record == null) {
+        IndexMappingRecord mappingRecord = response.result().get(indexName);
+        if (mappingRecord == null) {
             return false;
         }
-        Map<String, JsonData> meta = record.mappings().meta();
+        Map<String, JsonData> meta = mappingRecord.mappings().meta();
         if (meta.isEmpty()) {
             return false;
         }

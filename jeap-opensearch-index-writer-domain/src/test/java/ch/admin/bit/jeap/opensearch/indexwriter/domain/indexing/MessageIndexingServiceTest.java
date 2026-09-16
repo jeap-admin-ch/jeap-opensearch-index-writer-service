@@ -170,8 +170,9 @@ class MessageIndexingServiceTest {
         stubReferenceProvider();
         stubSearchItemFoundWith(null);
         stubIndexType();
+        MessageOperationConfig op = operation(IndexOperation.UPSERT, null);
 
-        assertThatThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)))
+        assertThatThrownBy(() -> service.index(message, op))
                 .isInstanceOf(IndexingException.class)
                 .hasMessageContaining("origin");
         verifyNoInteractions(indexWriter);
@@ -184,8 +185,9 @@ class MessageIndexingServiceTest {
         stubReferenceProvider();
         stubSearchItemFoundWith(new Origin(null, null, null, null, null, null, null));
         stubIndexType();
+        MessageOperationConfig op = operation(IndexOperation.UPSERT, null);
 
-        assertThatThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)))
+        assertThatThrownBy(() -> service.index(message, op))
                 .isInstanceOf(IndexingException.class)
                 .hasMessageContainingAll("origin.id");
         verifyNoInteractions(indexWriter);
@@ -373,8 +375,9 @@ class MessageIndexingServiceTest {
         when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 1)).thenReturn(Optional.of(indexType));
         when(indexType.dataClass()).thenReturn((Class) TypedDataWithNested.class);
         when(indexType.originType()).thenReturn(INDEX_TYPE);
+        MessageOperationConfig op = operation(IndexOperation.UPSERT, null);
 
-        assertThatThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)))
+        assertThatThrownBy(() -> service.index(message, op))
                 .isInstanceOf(IndexingException.class)
                 .hasMessageContaining("TypedDataWithNested")
                 .hasMessageContaining(INDEX_TYPE)
@@ -394,8 +397,9 @@ class MessageIndexingServiceTest {
         when(indexType.originType()).thenReturn(INDEX_TYPE);
         doThrow(new IllegalArgumentException("simulated Jackson failure"))
                 .when(jsonMapper).convertValue(any(), any(Class.class));
+        MessageOperationConfig op = operation(IndexOperation.UPSERT, null);
 
-        assertThatThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)))
+        assertThatThrownBy(() -> service.index(message, op))
                 .isInstanceOf(IndexingException.class)
                 .hasMessageContaining("TypedData")
                 .hasMessageContaining(INDEX_TYPE)

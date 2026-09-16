@@ -111,14 +111,14 @@ class OpenSearchIndexWriterIT {
     }
 
     @Test
-    void legacyIndicesCannotSilentlyAcquireAnalysis() throws Exception {
+    void legacyIndicesCannotSilentlyAcquireAnalysis() {
         ensureDefinition("legacy_v1_write", 0, MAPPING_JSON);
         assertThatThrownBy(() -> ensureDefinition("legacy_v1_write", 1, ANALYSIS_JSON))
                 .hasMessageContaining("settings.analysis");
     }
 
     @Test
-    void explicitDefaultSearchAnalyzersSurviveRestart() {
+    void explicitDefaultSearchAnalyzersSurviveRestart() throws IOException {
         String definition = ANALYSIS_JSON.replace("\"name\":{\"type\":\"text\",\"analyzer\":\"folding_analyzer\"}",
                 "\"name\":{\"type\":\"text\",\"analyzer\":\"folding_analyzer\",\"search_analyzer\":\"folding_analyzer\",\"search_quote_analyzer\":\"folding_analyzer\"}");
         ensureDefinition("explicit_search_v1_write", 0, definition);
@@ -128,6 +128,9 @@ class OpenSearchIndexWriterIT {
                 """;
         ensureDefinition("implicit_search_v1_write", 0, implicit);
         ensureDefinition("implicit_search_v1_write", 0, implicit);
+
+        assertThat(client.indices().exists(r -> r.index("explicit_search_v1-000001")).value()).isTrue();
+        assertThat(client.indices().exists(r -> r.index("implicit_search_v1-000001")).value()).isTrue();
     }
 
     @Test
@@ -146,8 +149,10 @@ class OpenSearchIndexWriterIT {
 
     @Test
     void unknownAnalyzerReferenceIsRejectedByOpenSearch() {
-        assertThatThrownBy(() -> ensureDefinition("invalid_analysis_v1_write", 0,
-                ANALYSIS_JSON.replace("\"analyzer\":\"folding_analyzer\"", "\"analyzer\":\"missing_analyzer\"")))
+        String invalidDefinition = ANALYSIS_JSON.replace(
+                "\"analyzer\":\"folding_analyzer\"", "\"analyzer\":\"missing_analyzer\"");
+
+        assertThatThrownBy(() -> ensureDefinition("invalid_analysis_v1_write", 0, invalidDefinition))
                 .isInstanceOf(OpenSearchIndexWriterException.class);
     }
 
@@ -448,15 +453,17 @@ class OpenSearchIndexWriterIT {
 
             GetMappingResponse mappingResp = client.indices().getMapping(
                     new GetMappingRequest.Builder().index(expectedPhysicalIndex).build());
-            IndexMappingRecord record = mappingResp.result().get(expectedPhysicalIndex);
-            assertThat(record).isNotNull();
-            String schemaVersion = record.mappings().meta().get(IndexMappingManager.SCHEMA_VERSION_META_KEY)
+            IndexMappingRecord mappingRecord = mappingResp.result().get(expectedPhysicalIndex);
+            assertThat(mappingRecord).isNotNull();
+            String schemaVersion = mappingRecord.mappings().meta().get(IndexMappingManager.SCHEMA_VERSION_META_KEY)
                     .to(String.class, client._transport().jsonpMapper());
             assertThat(schemaVersion).isEqualTo(String.valueOf(MINOR_VERSION));
         } finally {
             try {
                 client.indices().delete(new DeleteIndexRequest.Builder().index(expectedPhysicalIndex).build());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // Best-effort cleanup must not hide the original test failure when the index was not created.
+            }
         }
     }
 

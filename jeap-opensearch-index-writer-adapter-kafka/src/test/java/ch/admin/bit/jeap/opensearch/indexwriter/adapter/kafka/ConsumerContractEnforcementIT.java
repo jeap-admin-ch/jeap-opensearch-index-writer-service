@@ -15,16 +15,16 @@ class ConsumerContractEnforcementIT {
 
     @Test
     void applicationContextFailsToStartWithoutConsumerContractAnnotation() {
-        assertThatThrownBy(() ->
-                new SpringApplicationBuilder(KafkaIndexWriterConsumerFactoryITConfig.class, TestConfig.class)
-                        .web(WebApplicationType.NONE)
-                        .properties(
-                                "spring.application.name=consumer-contract-enforcement-it",
-                                "jeap.messaging.kafka.embedded=true")
-                        .run()
-        )
-        .isInstanceOf(NoContractException.class)
-        .hasMessageContaining("JmeDeclarationCreatedEvent");
+        SpringApplicationBuilder application = new SpringApplicationBuilder(
+                KafkaIndexWriterConsumerFactoryITConfig.class, TestConfig.class)
+                .web(WebApplicationType.NONE)
+                .properties(
+                        "spring.application.name=consumer-contract-enforcement-it",
+                        "jeap.messaging.kafka.embedded=true");
+
+        assertThatThrownBy(application::run)
+                .isInstanceOf(NoContractException.class)
+                .hasMessageContaining("JmeDeclarationCreatedEvent");
     }
 
     @Configuration
