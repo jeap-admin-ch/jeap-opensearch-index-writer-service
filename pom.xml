@@ -34,13 +34,11 @@
 
     <artifactId>jeap-opensearch-index-writer-service</artifactId>
     <name>${project.groupId}:${project.artifactId}</name>
-    <version>6.3.0-SNAPSHOT</version>
+    <version>6.3.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <properties>
         <maven.javadoc.skip>false</maven.javadoc.skip>
-        <opensearch.version>3.10.0</opensearch.version>
-        <wiremock-spring-boot.version>4.2.3</wiremock-spring-boot.version>
     </properties>
 
     <modules>
@@ -59,48 +57,42 @@
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-adapter-opensearch</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-domain</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-index-type-repository</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-adapter-kafka</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-web</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-index-config-repository</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-service-instance</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
             <dependency>
                 <groupId>ch.admin.bit.jeap</groupId>
                 <artifactId>jeap-opensearch-index-writer-adapter-remote-data</artifactId>
-                <version>6.3.0-SNAPSHOT</version>
-            </dependency>
-            <dependency>
-                <groupId>org.wiremock.integrations</groupId>
-                <artifactId>wiremock-spring-boot-standalone</artifactId>
-                <version>${wiremock-spring-boot.version}</version>
-                <scope>test</scope>
+                <version>6.3.1-SNAPSHOT</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
