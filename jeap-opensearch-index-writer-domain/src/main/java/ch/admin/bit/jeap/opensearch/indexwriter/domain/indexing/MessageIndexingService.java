@@ -21,9 +21,11 @@ import org.togglz.core.util.NamedFeature;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +33,9 @@ import java.util.List;
 public class MessageIndexingService {
 
     private static final String INDEXING_TIME_METRICS_NAME = "jeap.opensearch.indexwriter.indexing";
+    private static final String KAFKA_LAG_METRICS_NAME = "jeap.opensearch.indexwriter.kafka.lag";
+    private static final String SEARCHITEM_FETCH_TIME_METRICS_NAME = "jeap.opensearch.indexwriter.searchitem.fetch";
+    private static final String OPENSEARCH_WRITE_TIME_METRICS_NAME = "jeap.opensearch.indexwriter.opensearch.write";
 
     private final FeatureManager featureManager;
     private final SearchItemProvider searchItemProvider;
@@ -40,6 +45,7 @@ public class MessageIndexingService {
     private final JsonMapper jsonMapper;
 
     public void index(Message message, MessageOperationConfig operation) {
+        recordKafkaLag(message);
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             indexInternal(message, operation);
@@ -49,6 +55,25 @@ public class MessageIndexingService {
                     .tag("operation", operation.indexOperation().name())
                     .register(meterRegistry));
         }
+    }
+
+    /**
+     * Records the time elapsed between the triggering message's creation (set by the publishing
+     * producer) and the start of its processing here, i.e. the Kafka/network transit time, separately
+     * from the time spent fetching the SearchItem and writing to OpenSearch.
+     */
+    private void recordKafkaLag(Message message) {
+        if (message.getIdentity() == null) {
+            return;
+        }
+        Instant created = message.getIdentity().getCreated();
+        if (created == null) {
+            return;
+        }
+        Timer.builder(KAFKA_LAG_METRICS_NAME)
+                .tag("message_type", message.getType().getName())
+                .register(meterRegistry)
+                .record(Duration.between(created, Instant.now()));
     }
 
     private void indexInternal(Message message, MessageOperationConfig operation) {
@@ -67,26 +92,60 @@ public class MessageIndexingService {
     }
 
     private void indexForReference(OriginReference originReference, MessageOperationConfig operation) {
-        SearchItemResult searchItemResult = searchItemProvider.findSearchItem(operation.uri(), operation.indexType(), originReference, operation.oauthClientId()).orElseThrow(
-                () -> IndexingException.searchItemNotFound(operation, originReference)
-        );
+        SearchItemResult searchItemResult = timed(SEARCHITEM_FETCH_TIME_METRICS_NAME, operation,
+                () -> searchItemProvider.findSearchItem(operation.uri(), operation.indexType(), originReference, operation.oauthClientId())
+                        .orElseThrow(() -> IndexingException.searchItemNotFound(operation, originReference)));
 
         IndexType<?> indexType = indexTypeRepository.findByOriginTypeAndMajorVersion(operation.indexType(), searchItemResult.indexMajorVersion())
                 .orElseThrow(() -> IndexingException.indexTypeNotFound(operation.indexType(), searchItemResult.indexMajorVersion()));
 
         if (operation.indexOperation() == IndexOperation.UPSERT) {
-            upsert(indexType, originReference, searchItemResult);
+            upsert(indexType, originReference, searchItemResult, operation);
         } else {
-            indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id());
+            timedWrite(OPENSEARCH_WRITE_TIME_METRICS_NAME, operation, "delete",
+                    () -> indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id()));
         }
     }
 
-    private void upsert(IndexType<?> indexType, OriginReference originReference, SearchItemResult searchItemResult) {
+    private void upsert(IndexType<?> indexType, OriginReference originReference, SearchItemResult searchItemResult, MessageOperationConfig operation) {
         SearchItemMetadata metadata = new SearchItemMetadata(Instant.now(), searchItemResult.indexMajorVersion(), searchItemResult.indexMinorVersion());
         SearchItemIndexed<?> searchItemIndexed = toSearchItemIndexed(searchItemResult, indexType, metadata);
 
         validateRequiredFields(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed);
-        indexWriter.upsertSearchItem(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed);
+        timedWrite(OPENSEARCH_WRITE_TIME_METRICS_NAME, operation, "upsert",
+                () -> indexWriter.upsertSearchItem(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed));
+    }
+
+    /**
+     * Times a single indexing sub-step (SearchItem fetch) separately from the overall {@code indexing}
+     * timer, so the share of time spent in each can be analysed independently (e.g. during load/performance
+     * testing).
+     */
+    private <T> T timed(String metricsName, MessageOperationConfig operation, Supplier<T> action) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            return action.get();
+        } finally {
+            sample.stop(Timer.builder(metricsName)
+                    .tag("index_type", operation.indexType())
+                    .register(meterRegistry));
+        }
+    }
+
+    /**
+     * Times an OpenSearch write sub-step, tagged additionally with the write {@code operation} (upsert or
+     * delete) so the two can be analysed separately (e.g. during load/performance testing).
+     */
+    private void timedWrite(String metricsName, MessageOperationConfig operation, String writeOperation, Runnable action) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            action.run();
+        } finally {
+            sample.stop(Timer.builder(metricsName)
+                    .tag("index_type", operation.indexType())
+                    .tag("operation", writeOperation)
+                    .register(meterRegistry));
+        }
     }
 
     /**

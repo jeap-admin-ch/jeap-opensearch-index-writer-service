@@ -104,7 +104,7 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
                         .withHeader("index-major-version", "1")
                         .withHeader("index-minor-version", "0")
                         .withBody("""
-                                {"origin":null,"data":{}}
+                                {"origin":{"id":"origin-1"},"data":{}}
                                 """)));
     }
 
@@ -119,6 +119,25 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
                     .contains(
                             "jeap_opensearch_indexwriter_indexing_seconds_sum{message_type=\"JmeDeclarationCreatedEvent\"",
                             "jeap_opensearch_indexwriter_indexing_seconds_count{message_type=\"JmeDeclarationCreatedEvent\""
+                    );
+        });
+    }
+
+    @Test
+    void kafkaLagSearchItemFetchAndOpenSearchWriteTimerMetricsAreExposedOnPrometheusEndpointAfterProcessingMessage() {
+        sendSync(TEST_TOPIC, declarationEvent("metrics-2"));
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            var response = restTemplate.getForEntity("/actuator/prometheus", String.class);
+            assertEquals(200, response.getStatusCode().value());
+            assertThat(response.getBody())
+                    .contains(
+                            "jeap_opensearch_indexwriter_kafka_lag_seconds_sum{message_type=\"JmeDeclarationCreatedEvent\"",
+                            "jeap_opensearch_indexwriter_kafka_lag_seconds_count{message_type=\"JmeDeclarationCreatedEvent\"",
+                            "jeap_opensearch_indexwriter_searchitem_fetch_seconds_sum{index_type=\"TestDocument\"",
+                            "jeap_opensearch_indexwriter_searchitem_fetch_seconds_count{index_type=\"TestDocument\"",
+                            "jeap_opensearch_indexwriter_opensearch_write_seconds_sum{index_type=\"TestDocument\",operation=\"upsert\"",
+                            "jeap_opensearch_indexwriter_opensearch_write_seconds_count{index_type=\"TestDocument\",operation=\"upsert\""
                     );
         });
     }

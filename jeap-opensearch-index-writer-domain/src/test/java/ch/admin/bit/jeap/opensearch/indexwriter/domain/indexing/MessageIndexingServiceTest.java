@@ -1,6 +1,7 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing;
 
 import ch.admin.bit.jeap.messaging.model.Message;
+import ch.admin.bit.jeap.messaging.model.MessageIdentity;
 import ch.admin.bit.jeap.messaging.model.MessageType;
 import ch.admin.bit.jeap.opensearch.indextype.IndexType;
 import ch.admin.bit.jeap.opensearch.indextype.Origin;
@@ -302,6 +303,114 @@ class MessageIndexingServiceTest {
         verify(indexWriter).upsertSearchItem(eq(INDEX_WRITE_ALIAS), eq("id-1"), captor.capture());
         assertThat(captor.getValue().searchItem().majorVersion()).isEqualTo(2);
         assertThat(captor.getValue().searchItem().minorVersion()).isEqualTo(5);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void upsertRecordsIndexingSearchItemFetchAndOpenSearchWriteTimers() {
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        stubSearchItemFound();
+        stubIndexType();
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.indexing")
+                .tag("message_type", "PreziusRegistrationCreated")
+                .tag("operation", "UPSERT")
+                .timer().count()).isEqualTo(1);
+        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.searchitem.fetch")
+                .tag("index_type", INDEX_TYPE)
+                .timer().count()).isEqualTo(1);
+        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.opensearch.write")
+                .tag("index_type", INDEX_TYPE)
+                .tag("operation", "upsert")
+                .timer().count()).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void deleteRecordsIndexingSearchItemFetchAndOpenSearchWriteTimers() {
+        stubMessageType("PreziusRegistrationDeleted");
+        stubReferenceProvider();
+        stubSearchItemFound();
+        stubIndexType();
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.DELETE, null)));
+
+        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.indexing")
+                .tag("message_type", "PreziusRegistrationDeleted")
+                .tag("operation", "DELETE")
+                .timer().count()).isEqualTo(1);
+        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.searchitem.fetch")
+                .tag("index_type", INDEX_TYPE)
+                .timer().count()).isEqualTo(1);
+        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.opensearch.write")
+                .tag("index_type", INDEX_TYPE)
+                .tag("operation", "delete")
+                .timer().count()).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void recordsKafkaLagWhenMessageHasCreationTimestamp() {
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        stubSearchItemFound();
+        stubIndexType();
+        MessageIdentity identity = mock(MessageIdentity.class);
+        when(identity.getCreated()).thenReturn(Instant.now().minusSeconds(2));
+        when(message.getIdentity()).thenReturn(identity);
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        var kafkaLag = meterRegistry.get("jeap.opensearch.indexwriter.kafka.lag")
+                .tag("message_type", "PreziusRegistrationCreated")
+                .timer();
+        assertThat(kafkaLag.count()).isEqualTo(1);
+        assertThat(kafkaLag.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS)).isGreaterThanOrEqualTo(2000);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void doesNotRecordKafkaLagWhenMessageIdentityIsNull() {
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        stubSearchItemFound();
+        stubIndexType();
+        // message.getIdentity() returns null by default (unstubbed mock)
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        assertThat(meterRegistry.find("jeap.opensearch.indexwriter.kafka.lag").timer()).isNull();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void doesNotRecordKafkaLagWhenCreatedTimestampIsNull() {
+        stubMessageType("PreziusRegistrationCreated");
+        stubReferenceProvider();
+        stubSearchItemFound();
+        stubIndexType();
+        MessageIdentity identity = mock(MessageIdentity.class);
+        when(identity.getCreated()).thenReturn(null);
+        when(message.getIdentity()).thenReturn(identity);
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, null)));
+
+        assertThat(meterRegistry.find("jeap.opensearch.indexwriter.kafka.lag").timer()).isNull();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void doesNotRecordSearchItemFetchOrOpenSearchWriteTimersWhenSkippedByFeatureFlag() {
+        stubMessageType("PreziusRegistrationCreated");
+        when(featureManager.isActive(any(NamedFeature.class))).thenReturn(false);
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.UPSERT, "MY_FLAG")));
+
+        assertThat(meterRegistry.find("jeap.opensearch.indexwriter.searchitem.fetch").timer()).isNull();
+        assertThat(meterRegistry.find("jeap.opensearch.indexwriter.opensearch.write").timer()).isNull();
     }
 
     @Test
