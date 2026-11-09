@@ -29,11 +29,28 @@ public class IndexingException extends IndexWriterException {
     }
 
     public static IndexingException searchItemProviderServerError(String baseUri, String indexType, int statusCode) {
-        return new IndexingException("Search item provider returned server error " + statusCode + " for baseUri='" + baseUri + "' indexType='" + indexType + "'", true);
+        return new IndexingException("Search item provider returned server error " + statusCode + " for " + provider(baseUri, indexType), true);
+    }
+
+    public static IndexingException searchItemProviderTemporarilyUnavailable(String baseUri, String indexType, int statusCode) {
+        return new IndexingException("Search item provider returned temporary error " + statusCode + " for " + provider(baseUri, indexType), true);
     }
 
     public static IndexingException searchItemProviderNotReachable(String baseUri, String indexType, Throwable cause) {
-        return new IndexingException("Search item provider not reachable at baseUri='" + baseUri + "' indexType='" + indexType + "'", true, cause);
+        return new IndexingException("Search item provider not reachable at " + provider(baseUri, indexType), true, cause);
+    }
+
+    public static IndexingException searchItemProviderAuthorizationFailed(String baseUri, String indexType, String oauthClientId, Throwable cause) {
+        return new IndexingException("Failed to obtain an OAuth token for client '%s' to call search item provider at %s"
+                .formatted(oauthClientId, provider(baseUri, indexType)), true, cause);
+    }
+
+    public static IndexingException oauthClientNotRegistered(String oauthClientId, Throwable cause) {
+        return new IndexingException("No OAuth client registration found for client '%s'".formatted(oauthClientId), false, cause);
+    }
+
+    private static String provider(String baseUri, String indexType) {
+        return "baseUri='%s' indexType='%s'".formatted(baseUri, indexType);
     }
 
     public static IndexingException missingRequiredFields(String indexWriteAlias, String documentId, List<String> missingFields) {

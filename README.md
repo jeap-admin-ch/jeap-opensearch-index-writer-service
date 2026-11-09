@@ -14,6 +14,7 @@ the owning domain.
 - **Managed metadata:** `search_item.upserted_at`, `major_version`, and `minor_version` enriched automatically on every write
 - **Service-owned index templates:** Index templates created and kept up to date by the service at startup
 - **Native analysis:** IndexType-owned analyzers, normalizers, tokenizers, and filters combined with operational settings; deployed compatibility checked before template updates
+- **Current data in a schema major:** `CurrentSearchItemFetcher` requests an object's current data for a fixed schema major and verifies index type, major, minor and payload before it may be written
 - **Error handling:** Failed operations forwarded to the jEAP error handling service
 
 ## Documentation

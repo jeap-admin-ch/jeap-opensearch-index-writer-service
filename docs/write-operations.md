@@ -102,6 +102,91 @@ service. This is provided by the
 [jeap-opensearch-searchitem-api](https://github.com/jeap-admin-ch/jeap-opensearch-searchitem-api)
 library — see that repository for setup and configuration details.
 
+### Live events vs. current data in a schema major
+
+The service calls the endpoint in two ways:
+
+| Caller                                | Request                                                     | Schema major chosen by |
+|---------------------------------------|-------------------------------------------------------------|------------------------|
+| Live events (`MessageIndexingService`) | `index_type`, `origin_id`, optional `origin_version`        | Provider               |
+| Maintenance (`CurrentSearchItemFetcher`) | `index_type`, `origin_id`, `index_major_version` | Caller                 |
+
+Live events are unchanged. `origin_version` is the business revision of the object from the
+reference provider. It is never interpreted as a schema major, and maintenance never sends it.
+
+`CurrentSearchItemFetcher.fetch(baseUri, oauthClientId, indexType, originId)` requests the current
+data of the object for the major of the given `IndexType`. The `IndexType` must be an instance of the
+class registered (via `ServiceLoader`) for its origin type and major, with the same minor; a freshly
+constructed instance such as `new JmeDecreeDocumentV1IndexType()` is fine. Only registered index types have their
+template, index and write alias set up at startup; otherwise the fetcher throws an
+`IllegalArgumentException` without calling the provider. For example, to refresh object `12345` in
+`JmeDecreeDocument` major 1, it sends:
+
+```
+GET /index-api/searchitems?index_type=JmeDecreeDocument&origin_id=12345&index_major_version=1
+```
+
+The `index-major-version` / `index-minor-version` headers of the response describe what the provider
+produced. The schema major is not a physical index name; the target index is derived from the
+`IndexType` (`jme_decree_document_v1_write`). Before the item may be written, the fetcher rejects
+the response unless:
+
+- the `index-type` header is present and equals the requested index type (a provider that ignores
+  `index_major_version`, i.e. one on a searchitem-api version before 3.30.0, does not send it),
+- the major equals the requested major,
+- the minor is not higher than the minor of the writer's `IndexType` (older minors of the same major
+  are accepted),
+- `origin.id` equals the requested id and `data` is present, and
+- `data` deserializes into the `IndexType`'s data class with unknown properties rejected, so a payload
+  of another major is not silently squeezed into the class. A data class being registered, or reused
+  across minors, is not taken as proof. The check also applies to data classes (including nested
+  ones) annotated with `@JsonIgnoreProperties(ignoreUnknown = true)` or `@JsonAnySetter`, and
+  registered `DeserializationProblemHandler`s are not applied. Properties typed as `JsonNode`, `Map`
+  or `Object` accept any content, and per-type `JsonMapper` config overrides that ignore unknown
+  properties (`withConfigOverride(...).setIgnorals(...)`) still apply, so neither is checked.
+
+Live events deserialize `data` leniently and ignore unknown properties. For maintenance, the provider
+must therefore only send properties that the data class of the requested major models. Otherwise
+objects that live events index successfully are rejected here.
+
+Index types whose data class deliberately accepts open payloads (e.g. via `@JsonAnySetter`) can opt
+out of the strict payload check with
+`fetch(baseUri, oauthClientId, indexType, originId, CurrentSearchItemFetcher.PayloadCheck.LENIENT)`.
+`data` is then deserialized like for live events, honouring the data class's own handling of unknown
+properties. All other checks still apply.
+
+Failures are reported as a non-retryable `CurrentSearchItemException` with a `reason`:
+
+| Reason                            | Cause                                                                    |
+|-----------------------------------|--------------------------------------------------------------------------|
+| `NOT_FOUND`                       | Provider answered `404`: the object does not exist (any more).           |
+| `UNSUPPORTED_INDEX_MAJOR_VERSION` | Provider answered `422` with problem code `UNSUPPORTED_INDEX_MAJOR_VERSION`: it cannot build the requested major. |
+| `REQUEST_REJECTED`                | Provider answered any other `4xx` (e.g. `400`, `401`, `403`, or `422` with another problem code), except `408` and `429`, or a status outside the `2xx`, `4xx` and `5xx` ranges. |
+| `RESPONSE_MISMATCH`               | The response does not match the request (see the checks above), a successful response has no body or an unreadable body, or the version headers are missing or not numeric. |
+
+Server errors and network errors (including a connection lost while reading the response body) raise
+the same retryable `IndexingException` as for live events. A failure to obtain an OAuth token for
+`oauthClientId` (token endpoint unreachable or rejecting the request) raises a retryable
+`IndexingException` as well; an `oauthClientId` without an OAuth client registration raises a
+non-retryable `IndexingException`.
+Unlike for live events, `408 Request Timeout` and `429 Too Many Requests` are retryable as well.
+
+A `404` cannot be told apart from a misconfigured `baseUri` or a provider that lacks the endpoint.
+Do not delete indexed documents on `NOT_FOUND` alone; cross-check with the source of truth or make
+sure the `baseUri` is correct first.
+
+The fetcher does not write anything. A maintenance job writes the returned item to the `IndexType`'s
+write alias with the same `IndexWriter` call that live events use. The `origin` / `origin.id` check
+that live events run before the write is already part of the fetcher's checks:
+
+```java
+SearchItemIndexed<JmeDecreeDocumentV1> item = currentSearchItemFetcher.fetch(baseUri, oauthClientId, indexType, originId);
+indexWriter.upsertSearchItem(indexType.indexWriteAlias(), originId, item);
+```
+
+`search_item.upserted_at` in the returned item is set when the item is fetched, not when it is
+written. Write the item right after fetching it and do not rebuild its metadata.
+
 ## SearchItem read client
 
 The authorization-aware search client for consuming documents indexed by this service is provided by

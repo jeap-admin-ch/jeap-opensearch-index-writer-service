@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.20.0] - 2026-11-12
+
+### Added
+- `CurrentSearchItemFetcher` requests the current data of an object for a fixed schema major (`index_major_version`) and rejects responses whose index type, major, minor, origin id or payload do not match; `PayloadCheck.LENIENT` opts out of the strict payload check
+- `SearchItemProvider.findCurrentSearchItem` requests a fixed schema major via `index_major_version`
+- Metric `jeap.opensearch.indexwriter.currentsearchitem.fetch` times `CurrentSearchItemFetcher` provider calls
+
 ## [6.19.0] - 2026-11-11
 
 ### Dependencies

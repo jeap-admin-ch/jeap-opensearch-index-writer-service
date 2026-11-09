@@ -2,7 +2,11 @@ package ch.admin.bit.jeap.opensearch.indexwriter.web.it;
 
 import ch.admin.bit.jeap.domainevent.avro.AvroDomainEventBuilder;
 import ch.admin.bit.jeap.messaging.kafka.test.KafkaIntegrationTestBase;
+import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
 import ch.admin.bit.jeap.opensearch.indexwriter.adapter.kafka.KafkaIndexWriterConsumerFactory;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.CurrentSearchItemException;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.CurrentSearchItemFetcher;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
 import ch.admin.bit.jme.declaration.DeclarationPayload;
 import ch.admin.bit.jme.declaration.DeclarationReferences;
 import ch.admin.bit.jme.declaration.JmeDeclarationCreatedEvent;
@@ -44,6 +48,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -99,6 +104,12 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
 
     @Autowired
     private OpenSearchClient openSearchClient;
+
+    @Autowired
+    private CurrentSearchItemFetcher currentSearchItemFetcher;
+
+    @Autowired
+    private IndexWriter indexWriter;
 
     @Autowired
     private FeatureManager featureManager;
@@ -282,6 +293,43 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         assertThat(data.get("cases").isArray()).isTrue();
         assertThat(data.get("cases")).isEmpty();
         assertThat(data.get("single_object").get("name").asText()).isEqualTo("the-name");
+    }
+
+    @Test
+    void currentSearchItemFetcher_acceptsMatchingPayloadAndRejectsUnknownProperty() throws IOException {
+        stubCurrentSearchItem("{\"camel_case_field\":\"value\",\"another_camel_field\":\"test\"}");
+        ITTestIndexType indexType = new ITTestIndexType();
+
+        SearchItemIndexed<ITTestIndexTypeData> item = currentSearchItemFetcher.fetch(wireMock.baseUrl(), null, indexType, ORIGIN_ID);
+        assertThat(item.data()).isEqualTo(new ITTestIndexTypeData("value", "test"));
+
+        indexWriter.upsertSearchItem(indexType.indexWriteAlias(), ORIGIN_ID, item);
+
+        ObjectNode source = getDocumentSource(INDEX_WRITE_ALIAS, ORIGIN_ID);
+        assertThat(source.get("data").get("camel_case_field").asText()).isEqualTo("value");
+        assertThat(source.get("data").get("another_camel_field").asText()).isEqualTo("test");
+        assertThat(source.get("search_item").get("major_version").asInt()).isEqualTo(1);
+        assertThat(source.get("search_item").get("minor_version").asInt()).isZero();
+        assertThat(source.get("origin").get("id").asText()).isEqualTo(ORIGIN_ID);
+
+        stubCurrentSearchItem("{\"camel_case_field\":\"value\",\"unknown_field\":\"x\"}");
+
+        assertThatThrownBy(() -> currentSearchItemFetcher.fetch(wireMock.baseUrl(), null, new ITTestIndexType(), ORIGIN_ID))
+                .isInstanceOf(CurrentSearchItemException.class)
+                .hasMessageContaining("unknown_field")
+                .matches(e -> ((CurrentSearchItemException) e).getReason() == CurrentSearchItemException.Reason.RESPONSE_MISMATCH);
+    }
+
+    private void stubCurrentSearchItem(String data) {
+        wireMock.stubFor(get(urlPathEqualTo("/index-api/searchitems"))
+                .withQueryParam("index_major_version", equalTo("1"))
+                .atPriority(1)
+                .willReturn(aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withHeader("index-type", "TestDocument")
+                        .withHeader("index-major-version", "1")
+                        .withHeader("index-minor-version", "0")
+                        .withBody("{\"origin\":{\"id\":\"" + ORIGIN_ID + "\"},\"data\":" + data + "}")));
     }
 
     /**

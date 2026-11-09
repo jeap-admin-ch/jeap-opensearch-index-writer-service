@@ -85,7 +85,10 @@ Step by step:
 2. **Extract references.** The `ReferenceProvider` bean configured for the operation extracts one or
    more `OriginReference` objects from the message. Each reference is processed independently.
 3. **Fetch SearchItem.** For `UPSERT` operations, `HttpSearchItemProvider` calls the owning domain
-   service's SearchItem Provider endpoint and retrieves the current search representation.
+   service's SearchItem Provider endpoint and retrieves the current search representation. The
+   provider chooses the schema major; the optional `origin_version` of the reference is passed through.
+   Maintenance requests the current data in a fixed schema major instead via `CurrentSearchItemFetcher`
+   (see [Write operations](write-operations.md#live-events-vs-current-data-in-a-schema-major)).
 4. **Validate and enrich.** The service validates the `SearchItem` fields against the `IndexType`
    mapping and enriches the document with metadata (`upserted_at`, `major_version`, `minor_version`).
 5. **Write.** `OpenSearchIndexWriter` sends the document to OpenSearch via the `IndexWriteAlias`
