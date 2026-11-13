@@ -7,6 +7,9 @@ import ch.admin.bit.jeap.opensearch.indexwriter.adapter.kafka.KafkaIndexWriterCo
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.CurrentSearchItemException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.CurrentSearchItemFetcher;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.indexing.writer.IndexWriter;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.acceptance.JobTargetAcceptance;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.acceptance.JobTargetAcceptanceCheck;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.acceptance.PolicyCheckOutcome;
 import ch.admin.bit.jme.declaration.DeclarationPayload;
 import ch.admin.bit.jme.declaration.DeclarationReferences;
 import ch.admin.bit.jme.declaration.JmeDeclarationCreatedEvent;
@@ -110,6 +113,9 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
 
     @Autowired
     private IndexWriter indexWriter;
+
+    @Autowired
+    private JobTargetAcceptanceCheck jobTargetAcceptanceCheck;
 
     @Autowired
     private FeatureManager featureManager;
@@ -293,6 +299,14 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
         assertThat(data.get("cases").isArray()).isTrue();
         assertThat(data.get("cases")).isEmpty();
         assertThat(data.get("single_object").get("name").asText()).isEqualTo("the-name");
+    }
+
+    @Test
+    void jobTargetAcceptanceCheck_isWiredAndAllowsTargetWithoutPolicy() {
+        JobTargetAcceptance acceptance = jobTargetAcceptanceCheck.check("test_document_v1-000001");
+
+        assertThat(acceptance.outcome()).isEqualTo(PolicyCheckOutcome.NO_POLICY_APPLIED);
+        assertThat(acceptance.allowed()).isTrue();
     }
 
     @Test

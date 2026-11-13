@@ -3,6 +3,7 @@ package ch.admin.bit.jeap.opensearch.indexwriter.adapter.opensearch;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.exception.IndexWriterException;
 
 import java.util.List;
+import java.util.Set;
 
 class OpenSearchIndexWriterException extends IndexWriterException {
 
@@ -14,7 +15,7 @@ class OpenSearchIndexWriterException extends IndexWriterException {
         super(message, retryable);
     }
 
-    static OpenSearchIndexWriterException ambiguousWriteIndex(String indexWriteAlias, java.util.Set<String> physicalIndices) {
+    static OpenSearchIndexWriterException ambiguousWriteIndex(String indexWriteAlias, Set<String> physicalIndices) {
         return new OpenSearchIndexWriterException(
                 "Cannot determine physical write index for alias '%s': multiple indices %s found but none has isWriteIndex=true".formatted(indexWriteAlias, physicalIndices), false);
     }

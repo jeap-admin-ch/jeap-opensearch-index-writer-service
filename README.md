@@ -15,6 +15,7 @@ the owning domain.
 - **Service-owned index templates:** Index templates created and kept up to date by the service at startup
 - **Native analysis:** IndexType-owned analyzers, normalizers, tokenizers, and filters combined with operational settings; deployed compatibility checked before template updates
 - **Current data in a schema major:** `CurrentSearchItemFetcher` requests an object's current data for a fixed schema major and verifies index type, major, minor and payload before it may be written
+- **Maintenance target policy check:** `JobTargetAcceptanceCheck` refuses a maintenance job target whose applied ISM policy contains a rollover action (`not-allowed`), checked once at job creation
 - **Error handling:** Failed operations forwarded to the jEAP error handling service
 
 ## Documentation
@@ -27,6 +28,7 @@ the owning domain.
 - [Native analysis and migration](docs/native-analysis.md)
 - [Startup behaviour](docs/startup-behaviour.md)
 - [Write operations](docs/write-operations.md)
+- [Maintenance job target policy check](docs/maintenance-target-policy-check.md)
 - [OpenSearch permissions](docs/opensearch-permissions.md)
 - [Consumer contracts](docs/consumer-contracts.md)
 - [Metrics](docs/metrics.md)

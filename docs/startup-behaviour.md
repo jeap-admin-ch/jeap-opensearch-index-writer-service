@@ -65,10 +65,16 @@ single physical index), the single physical index is used.
 | Mapping version differs                                                        | Push updated mapping to the write index via `PUT /{physicalIndex}/_mapping`.                                                                             |
 | OpenSearch returns `cluster_block_exception` (e.g. disk flood-stage watermark) | Log a warning and continue startup — the mapping update is applied on the next startup once the block is removed.                                        |
 
+## Maintenance job target policy check
+
+The ISM policy check of maintenance job targets does not run at startup; it runs once when a job is
+created. See [Maintenance job target policy check](maintenance-target-policy-check.md).
+
 ## Related
 
 - [Architecture](architecture.md)
 - [Configuration reference](configuration.md)
 - [Index types](index-types.md)
 - [OpenSearch permissions](opensearch-permissions.md)
+- [Maintenance job target policy check](maintenance-target-policy-check.md)
 - [jeap-opensearch-index-writer-service](../README.md)

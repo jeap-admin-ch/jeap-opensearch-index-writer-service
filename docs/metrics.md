@@ -11,6 +11,7 @@ Grafana.
 | `jeap.opensearch.indexwriter.kafka.lag`          | Timer   | `message_type`                | Time between the triggering message's creation (set by the publishing producer) and the start of its processing here — i.e. Kafka/network transit time. Omitted if the message has no creation timestamp. |
 | `jeap.opensearch.indexwriter.searchitem.fetch`   | Timer   | `index_type`                   | Time spent calling the owning domain service's SearchItem Provider endpoint to retrieve the current search representation.                                                        |
 | `jeap.opensearch.indexwriter.currentsearchitem.fetch` | Timer | `index_type`                | Time spent calling the SearchItem Provider endpoint from `CurrentSearchItemFetcher` (maintenance, fixed schema major). Kept separate from `searchitem.fetch` so live-event latency is not mixed with maintenance runs. |
+| `jeap.opensearch.indexwriter.maintenance.policy.check` | Counter | `outcome`              | Number of maintenance job target policy checks (`JobTargetAcceptanceCheck`) by outcome: `rollover_in_policy` (refused), `no_rollover_in_policy`, `no_policy_applied`, `policy_undetermined`. Each check reads the policy once; failed checks (missing target, OpenSearch unavailable) are not counted. |
 | `jeap.opensearch.indexwriter.opensearch.write`   | Timer   | `index_type`, `operation`      | Time spent writing a document to OpenSearch. The `operation` tag (`upsert` or `delete`) allows breaking down write time by write kind.                                              |
 
 ## Notes
@@ -25,6 +26,11 @@ with `indexing` to break down where processing time is spent: Kafka/network tran
 SearchItem fetch, and the OpenSearch write itself. The remainder of `indexing` not covered by
 `searchitem.fetch` and `opensearch.write` is internal IWS overhead (validation, deserialization,
 reference extraction).
+
+The `maintenance.policy.check` counter fails open: a missing ISM explain permission makes every
+check report `policy_undetermined` and allow the target instead of refusing it. Alert on a nonzero
+rate of the `policy_undetermined` outcome, see [Maintenance job target policy
+check](maintenance-target-policy-check.md#permissions).
 
 ## Related
 

@@ -103,6 +103,12 @@ The provider base URI and the OAuth2 client ID are not configured here — they 
 configuration. A client ID referenced there must be registered under
 `spring.security.oauth2.client.registration`, see [Message configuration](message-configuration.md).
 
+## Maintenance job target policy check
+
+| Property                                                                                  | Default | Description                                                                                                                                      |
+|-------------------------------------------------------------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jeap.opensearch.indexwriter.maintenance.policy-check.verify-permission-on-startup`       | `false` | Probe ISM Explain once at startup and log an `ERROR` if it is denied. Enable it in services that use the [policy check](maintenance-target-policy-check.md). |
+
 ## Index rollover
 
 Index rollover is managed server-side by an **OpenSearch ISM (Index State Management) policy**

@@ -10,6 +10,10 @@ manage index templates, create physical indices, and write documents.
 | `indices:admin/index_template/put` | Create or update index templates on startup.    |
 | `indices:admin/aliases/get`        | Required at cluster level for alias resolution. |
 | `indices:data/write/bulk`          | Write documents via the bulk API.               |
+| `cluster:admin/opendistro/ism/managedindex/explain` | Read the ISM policy applied to a maintenance job target ([policy check](maintenance-target-policy-check.md)). |
+
+Without the ISM explain permission, the policy check cannot read the policy and allows the job
+without verifying non-rolling operation (`policy_undetermined`); grant it so that rolling targets are refused.
 
 ## Index permissions
 
@@ -31,6 +35,7 @@ index patterns without needing per-index configuration.
 | `indices:data/write/delete`    | Delete individual documents.                                                 |
 | `indices:data/read/get`        | Read individual documents (used for validation).                             |
 | `indices:data/read/search`     | Execute search queries (used for validation).                                |
+| `indices:admin/get`            | Check whether a maintenance job target exists when ISM explain does not report it. Without it, a missing target is allowed as `policy_undetermined` instead of failing. |
 
 ## OpenSearch security role JSON
 
@@ -39,7 +44,8 @@ index patterns without needing per-index configuration.
   "cluster_permissions": [
     "indices:admin/index_template/put",
     "indices:admin/aliases/get",
-    "indices:data/write/bulk"
+    "indices:data/write/bulk",
+    "cluster:admin/opendistro/ism/managedindex/explain"
   ],
   "index_permissions": [
     {
@@ -56,7 +62,8 @@ index patterns without needing per-index configuration.
         "indices:data/write/index",
         "indices:data/write/delete",
         "indices:data/read/get",
-        "indices:data/read/search"
+        "indices:data/read/search",
+        "indices:admin/get"
       ]
     }
   ]
@@ -67,4 +74,5 @@ index patterns without needing per-index configuration.
 
 - [Configuration reference](configuration.md)
 - [Startup behaviour](startup-behaviour.md)
+- [Maintenance job target policy check](maintenance-target-policy-check.md)
 - [jeap-opensearch-index-writer-service](../README.md)

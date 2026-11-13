@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.23.0] - 2026-11-19
+
+### Added
+- `JobTargetAcceptanceCheck` refuses maintenance job targets whose applied ISM policy contains a rollover action (see docs/maintenance-target-policy-check.md)
+- Metric `jeap.opensearch.indexwriter.maintenance.policy.check` counts policy checks by outcome
+- Opt-in startup probe `jeap.opensearch.indexwriter.maintenance.policy-check.verify-permission-on-startup` for the ISM explain permission; documented required permissions
+
+### Fixed
+- Declare `reactive-streams` explicitly; `opensearch-java` 3.11.0 needs it at runtime but does not declare it
+
+### Dependencies
+- **ch.admin.bit.jeap:jeap-spring-boot-parent**: 41.39.0 → 41.41.0 (minor)
+
 ## [6.22.0] - 2026-11-18
 
 ### Dependencies
