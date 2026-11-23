@@ -118,7 +118,10 @@ jeap:
           refresh-interval: "1s"
 ```
 
-See the [Configuration reference](configuration.md) for all available properties.
+See the [Configuration reference](configuration.md) for all available properties. By default a
+deployed index has no ISM lifecycle policy attached — it is written to indefinitely and never
+rolls over or expires by age. See [Index lifecycle](configuration.md#index-lifecycle) for how to
+verify this and when to opt into rollover instead.
 
 ## 6. Declare consumer contracts
 

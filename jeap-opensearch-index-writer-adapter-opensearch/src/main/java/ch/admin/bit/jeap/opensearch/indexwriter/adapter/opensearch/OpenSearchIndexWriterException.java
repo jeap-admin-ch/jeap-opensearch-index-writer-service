@@ -5,7 +5,7 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.exception.IndexWriterExce
 import java.util.List;
 import java.util.Set;
 
-class OpenSearchIndexWriterException extends IndexWriterException {
+public class OpenSearchIndexWriterException extends IndexWriterException {
 
     private OpenSearchIndexWriterException(String message, boolean retryable, Throwable cause) {
         super(message, retryable, cause);
@@ -25,6 +25,19 @@ class OpenSearchIndexWriterException extends IndexWriterException {
                 ("Index '%s' has is_write_index=false for alias '%s' — likely caused by a failed ISM rollover that left the alias in a broken state. " +
                  "Fix by running: POST /_aliases {\"actions\":[{\"add\":{\"index\":\"%s\",\"alias\":\"%s\",\"is_write_index\":true}}]}")
                         .formatted(physicalIndex, indexWriteAlias, physicalIndex, indexWriteAlias), false);
+    }
+
+    // Public for the maintenance subpackage
+    public static OpenSearchIndexWriterException incompatibleMaintenanceIndex(String index, String reason) {
+        return new OpenSearchIndexWriterException(
+                "Maintenance index '%s' is incompatible with the mapping shipped with this version: %s. It is never recreated automatically, migrate or remove it manually"
+                        .formatted(index, reason), false);
+    }
+
+    public static OpenSearchIndexWriterException maintenanceIndexCreationFailed(String index, int status, Object body) {
+        return new OpenSearchIndexWriterException(
+                "Maintenance index '%s' could not be created (HTTP %d: %s). Check that the service user may create the index (see opensearch-permissions.md) and the 'jeap.opensearch.indexwriter.maintenance.index-settings' configuration"
+                        .formatted(index, status, body), false);
     }
 
     static OpenSearchIndexWriterException invalidConnectionUrl(String configuredUrl, String reason) {

@@ -25,7 +25,10 @@ settings-read permission; see [Native analysis](native-analysis.md).
 The service **creates and manages the index template itself**. After compatibility checks, on every startup it
 applies the template via `PUT`, creating it if it does not exist or overwriting it if it does. The
 template always contains the current mapping, optional IndexType-owned native analysis, the configured shard/replica/refresh settings, the
-read alias, and the ISM rollover alias setting.
+read alias, and the ISM rollover alias setting — regardless of whether any ISM policy is actually
+attached. By default no policy is attached, so the write alias simply stays on the one physical index
+indefinitely; see [Index lifecycle](configuration.md#index-lifecycle) for when and how to opt into
+rollover instead.
 
 The template name is derived from the write alias by stripping the `_write` suffix:
 

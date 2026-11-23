@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.24.0] - 2026-11-24
+
+### Added
+- Opt-in maintenance job API to submit and report upsert and delete jobs (`jeap.opensearch.indexwriter.maintenance.enabled`, default `false`); jobs are stored but not yet executed (see docs/maintenance-jobs.md)
+
+### Changed
+- Documentation (getting-started, configuration, startup-behaviour, index-types) now leads with the non-rollover default: a deployed index has no ISM lifecycle policy attached unless IaC deliberately attaches one; rollover is described as an explicit, separately-configured alternative. No implementation change — the service was already rollover-agnostic.
+
 ## [6.23.0] - 2026-11-19
 
 ### Added

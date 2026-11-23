@@ -66,6 +66,25 @@ class ServiceLoaderIndexTypeRepositoryTest {
     }
 
     @Test
+    void findHighestMajorVersionReturnsHighestMajorAndItsHighestMinor() throws Exception {
+        ServiceLoaderIndexTypeRepository repo = repositoryWith(new TestIndexType(), new TestIndexTypeV2(0), new TestIndexTypeV2(1),
+                new TestIndexTypeV1Minor1(), new OtherIndexTypeV3());
+
+        Optional<IndexType<?>> result = repo.findHighestMajorVersion("TestDocument");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().majorVersion()).isEqualTo(2);
+        assertThat(result.get().minorVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void findHighestMajorVersionReturnsEmptyForUnknownType() throws Exception {
+        ServiceLoaderIndexTypeRepository repo = repositoryWith(new TestIndexType(), new OtherIndexTypeV3());
+
+        assertThat(repo.findHighestMajorVersion("Unknown")).isEmpty();
+    }
+
+    @Test
     void failsToStartWhenNoIndexTypesOnClasspath() {
         ServiceLoaderIndexTypeRepository emptyRepo = new ServiceLoaderIndexTypeRepository();
 
@@ -75,6 +94,44 @@ class ServiceLoaderIndexTypeRepositoryTest {
         assertThatThrownBy(() -> emptyRepo.load(emptyClassLoader))
                 .isInstanceOf(ConfigurationException.class)
                 .hasMessageContaining("No IndexType implementations found");
+    }
+
+    private static ServiceLoaderIndexTypeRepository repositoryWith(IndexType<?>... indexTypes) throws Exception {
+        ServiceLoaderIndexTypeRepository repo = new ServiceLoaderIndexTypeRepository();
+        Field field = ServiceLoaderIndexTypeRepository.class.getDeclaredField("indexTypes");
+        field.setAccessible(true);
+        field.set(repo, List.of(indexTypes));
+        return repo;
+    }
+
+    private static class TestIndexTypeV2 extends TestIndexType {
+        private final int minor;
+
+        TestIndexTypeV2(int minor) {
+            this.minor = minor;
+        }
+
+        @Override
+        public int majorVersion() {
+            return 2;
+        }
+
+        @Override
+        public int minorVersion() {
+            return minor;
+        }
+    }
+
+    private static class OtherIndexTypeV3 extends TestIndexType {
+        @Override
+        public String originType() {
+            return "OtherDocument";
+        }
+
+        @Override
+        public int majorVersion() {
+            return 3;
+        }
     }
 
     private static class TestIndexTypeV1Minor1 extends TestIndexType {

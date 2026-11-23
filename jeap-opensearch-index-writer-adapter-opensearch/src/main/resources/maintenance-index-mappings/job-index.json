@@ -1,0 +1,35 @@
+{
+  "settings": {
+    "index.translog.durability": "request"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "maintenance_schema_version": 1
+    },
+    "properties": {
+      "job_id": {"type": "keyword"},
+      "job_type": {"type": "keyword"},
+      "request_hash": {"type": "keyword"},
+      "job_state": {"type": "keyword"},
+      "job_result": {"type": "keyword"},
+      "expected_task_count": {"type": "integer"},
+      "materialization_state": {"type": "keyword"},
+      "started_at": {"type": "date"},
+      "completed_at": {"type": "date"},
+      "submitted_by": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "keyword"},
+          "ext_id": {"type": "keyword"}
+        }
+      },
+      "request": {"type": "object", "enabled": false},
+      "major_selection": {"type": "keyword"},
+      "resolved_index_major_version": {"type": "integer"},
+      "target_index": {"type": "keyword"},
+      "target_index_uuid": {"type": "keyword"},
+      "rollover_detection": {"type": "keyword"}
+    }
+  }
+}

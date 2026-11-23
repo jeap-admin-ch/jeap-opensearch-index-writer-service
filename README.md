@@ -29,6 +29,7 @@ the owning domain.
 - [Startup behaviour](docs/startup-behaviour.md)
 - [Write operations](docs/write-operations.md)
 - [Maintenance job target policy check](docs/maintenance-target-policy-check.md)
+- [Maintenance jobs (YAML API, storage, retention)](docs/maintenance-jobs.md)
 - [OpenSearch permissions](docs/opensearch-permissions.md)
 - [Consumer contracts](docs/consumer-contracts.md)
 - [Metrics](docs/metrics.md)

@@ -40,6 +40,7 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-spring-boot-roles-anywhere-starter - [ch.admin.bit.jeap:jeap-spring-boot-roles-anywhere-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-roles-anywhere-starter/tree/main/jeap-spring-boot-roles-anywhere-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-security-client-starter - [ch.admin.bit.jeap:jeap-spring-boot-security-client-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-client-starter)
  * ch.admin.bit.jeap:jeap-spring-boot-security-starter - [ch.admin.bit.jeap:jeap-spring-boot-security-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter)
+ * ch.admin.bit.jeap:jeap-spring-boot-security-starter-test - [ch.admin.bit.jeap:jeap-spring-boot-security-starter-test](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter-test)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger - [ch.admin.bit.jeap:jeap-spring-boot-swagger](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger-starter - [ch.admin.bit.jeap:jeap-spring-boot-swagger-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger-starter)
  * ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event - [ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event](https://github.com/jeap-admin-ch/jeap-test-message-type-registry/tree/main)
@@ -189,6 +190,7 @@ Apache License Version 2.0
  * scala-library-bootstrapped - [org.scala-lang:scala-library](https://scala-lang.org/)
  * Scala Reflect - [org.scala-lang:scala-reflect](https://www.scala-lang.org/)
  * JSONassert - [org.skyscreamer:jsonassert](https://github.com/skyscreamer/JSONassert)
+ * SnakeYAML Engine - [org.snakeyaml:snakeyaml-engine](https://bitbucket.org/snakeyaml/snakeyaml-engine)
  * springdoc-openapi-starter-common - [org.springdoc:springdoc-openapi-starter-common](https://springdoc.org/springdoc-openapi-starter-common/)
  * springdoc-openapi-starter-webmvc-api - [org.springdoc:springdoc-openapi-starter-webmvc-api](https://springdoc.org/springdoc-openapi-starter-webmvc-api/)
  * springdoc-openapi-starter-webmvc-ui - [org.springdoc:springdoc-openapi-starter-webmvc-ui](https://springdoc.org/springdoc-openapi-starter-webmvc-ui/)
@@ -265,6 +267,7 @@ Apache License Version 2.0
  * spring-security-oauth2-core - [org.springframework.security:spring-security-oauth2-core](https://spring.io/projects/spring-security)
  * spring-security-oauth2-jose - [org.springframework.security:spring-security-oauth2-jose](https://spring.io/projects/spring-security)
  * spring-security-oauth2-resource-server - [org.springframework.security:spring-security-oauth2-resource-server](https://spring.io/projects/spring-security)
+ * spring-security-test - [org.springframework.security:spring-security-test](https://spring.io/projects/spring-security)
  * spring-security-web - [org.springframework.security:spring-security-web](https://spring.io/projects/spring-security)
  * Togglz - Core Framework - [org.togglz:togglz-core](https://www.togglz.org/togglz-core/)
  * Togglz - Spring Boot Auto Configuration - [org.togglz:togglz-spring-boot-autoconfigure](https://www.togglz.org/togglz-spring-boot/togglz-spring-boot-autoconfigure/)
@@ -321,6 +324,7 @@ Apache License Version 2.0
  * Amazon MSK Library for AWS Identity and Access Management - [software.amazon.msk:aws-msk-iam-auth](https://docs.aws.amazon.com/msk/latest/developerguide/iam-access-control.html)
  * Jackson-core - [tools.jackson.core:jackson-core](https://github.com/FasterXML/jackson-core)
  * jackson-databind - [tools.jackson.core:jackson-databind](https://github.com/FasterXML/jackson)
+ * Jackson-dataformat-YAML - [tools.jackson.dataformat:jackson-dataformat-yaml](https://github.com/FasterXML/jackson-dataformats-text)
 
 BSD 2-Clause License
 -------------------------------

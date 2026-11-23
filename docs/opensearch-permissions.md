@@ -37,6 +37,21 @@ index patterns without needing per-index configuration.
 | `indices:data/read/search`     | Execute search queries (used for validation).                                |
 | `indices:admin/get`            | Check whether a maintenance job target exists when ISM explain does not report it. Without it, a missing target is allowed as `policy_undetermined` instead of failing. |
 
+## Maintenance job and task indices
+
+Only needed when `jeap.opensearch.indexwriter.maintenance.enabled=true` ([maintenance jobs](maintenance-jobs.md)).
+The service creates the job and task indices itself, so the principal needs the following additional index
+permissions on the configured `job-index` and `task-index` names (the `*` pattern above already covers them):
+
+| Permission                              | Purpose                                                              |
+|-----------------------------------------|----------------------------------------------------------------------|
+| `indices:admin/create`                  | Create the job and task indices on startup if missing.               |
+| `indices:admin/mappings/get`            | Check that existing indices are compatible with the shipped mapping. |
+| `indices:admin/refresh*`                | Make stored tasks visible after batch creation.                      |
+| `indices:data/write/update`             | Conditionally update job state.                                      |
+| `indices:data/write/delete/byquery`     | Delete the tasks of finished jobs after the retention period.        |
+| `indices:data/read/scroll*`             | Required by delete-by-query.                                         |
+
 ## OpenSearch security role JSON
 
 ```json
@@ -61,6 +76,10 @@ index patterns without needing per-index configuration.
         "indices:data/write/bulk",
         "indices:data/write/index",
         "indices:data/write/delete",
+        "indices:data/write/update",
+        "indices:data/write/delete/byquery",
+        "indices:admin/refresh*",
+        "indices:data/read/scroll*",
         "indices:data/read/get",
         "indices:data/read/search",
         "indices:admin/get"
@@ -74,5 +93,6 @@ index patterns without needing per-index configuration.
 
 - [Configuration reference](configuration.md)
 - [Startup behaviour](startup-behaviour.md)
+- [Maintenance jobs](maintenance-jobs.md)
 - [Maintenance job target policy check](maintenance-target-policy-check.md)
 - [jeap-opensearch-index-writer-service](../README.md)

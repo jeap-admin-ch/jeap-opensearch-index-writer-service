@@ -1,0 +1,35 @@
+{
+  "settings": {
+    "index.translog.durability": "request"
+  },
+  "mappings": {
+    "dynamic": "strict",
+    "_meta": {
+      "maintenance_schema_version": 1
+    },
+    "properties": {
+      "job_id": {"type": "keyword"},
+      "task_id": {"type": "keyword"},
+      "position": {"type": "integer"},
+      "origin_id": {"type": "keyword"},
+      "reference_version": {"type": "keyword"},
+      "actual_index_major_version": {"type": "integer"},
+      "actual_index_minor_version": {"type": "integer"},
+      "deletion_outcome": {"type": "keyword"},
+      "command_id": {"type": "keyword"},
+      "dispatch_state": {"type": "keyword"},
+      "task_state": {"type": "keyword"},
+      "created_at": {"type": "date"},
+      "completed_at": {"type": "date"},
+      "error": {
+        "type": "object",
+        "properties": {
+          "code": {"type": "keyword"},
+          "message": {"type": "text", "index": false},
+          "target_index": {"type": "keyword"},
+          "trace_id": {"type": "keyword"}
+        }
+      }
+    }
+  }
+}

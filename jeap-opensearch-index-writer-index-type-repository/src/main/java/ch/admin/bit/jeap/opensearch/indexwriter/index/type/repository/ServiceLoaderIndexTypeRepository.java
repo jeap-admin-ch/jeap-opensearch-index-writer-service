@@ -6,12 +6,13 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.config.indextype.IndexTyp
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-@Component
+@Repository
 @Slf4j
 class ServiceLoaderIndexTypeRepository implements IndexTypeRepository {
 
@@ -35,6 +36,14 @@ class ServiceLoaderIndexTypeRepository implements IndexTypeRepository {
     @SuppressWarnings("java:S1452")
     public List<IndexType<?>> getAll() {
         return indexTypes;
+    }
+
+    @Override
+    @SuppressWarnings("java:S1452")
+    public Optional<IndexType<?>> findHighestMajorVersion(String originType) {
+        return indexTypes.stream()
+                .filter(it -> it.originType().equals(originType))
+                .max(Comparator.<IndexType<?>>comparingInt(IndexType::majorVersion).thenComparingInt(IndexType::minorVersion));
     }
 
     @Override

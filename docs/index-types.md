@@ -16,13 +16,17 @@ Index types are defined in separate Maven artifacts and consumed as dependencies
 | BusinessObject | Type of the business object         | `[A-Z][a-z0-9]+`            | `DecreeDocument`, `Registration` |
 | MajorVersion   | Breaking schema version             | Integer                     | `1`, `2`                         |
 | MinorVersion   | Backwards-compatible schema version | Integer                     | `0`, `1`                         |
-| Sequence       | Rollover partition number           | 6-digit zero-padded integer | `000001`, `000002`               |
+| Sequence       | Partition number                    | 6-digit zero-padded integer | `000001`, `000002`               |
 
 ## Physical index
 
-A physical OpenSearch index holds the documents for one `IndexTypeVersion` and one rollover
-partition. The write alias always points to the current write index; when ISM rollover fires, the
-alias is atomically re-pointed to the new partition.
+A physical OpenSearch index holds the documents for one `IndexTypeVersion` and one partition. By
+default there is exactly one partition (`-000001`) per `IndexTypeVersion`, created once and written to
+indefinitely — the `-000001` suffix supports a future rollover but does not itself trigger one. If an
+ISM rollover policy is deliberately attached (see
+[Index lifecycle](configuration.md#index-lifecycle)), new partitions are created automatically when
+rollover fires, and the write alias is atomically re-pointed to the new partition; the service's own
+naming and write-alias handling are identical either way.
 
 **Pattern:** `<System>_<BusinessObject>_v<MajorVersion>-<Seq>`
 

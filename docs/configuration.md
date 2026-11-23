@@ -107,20 +107,58 @@ configuration. A client ID referenced there must be registered under
 
 | Property                                                                                  | Default | Description                                                                                                                                      |
 |-------------------------------------------------------------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `jeap.opensearch.indexwriter.maintenance.enabled` | `false` | Enables the maintenance job API, job/task index initialisation and housekeeping. See [Maintenance jobs](maintenance-jobs.md) for all `maintenance.*` job settings. |
 | `jeap.opensearch.indexwriter.maintenance.policy-check.verify-permission-on-startup`       | `false` | Probe ISM Explain once at startup and log an `ERROR` if it is denied. Enable it in services that use the [policy check](maintenance-target-policy-check.md). |
 
-## Index rollover
+## Index lifecycle
 
-Index rollover is managed server-side by an **OpenSearch ISM (Index State Management) policy**
-configured in IaC. The service itself does not trigger rollover.
+By default, a deployed index has **no lifecycle policy attached** — it never rolls over and its
+single physical index is never deleted by OpenSearch. This is the normal setup: the service always
+creates a physical index named `{base}-000001` on first startup and writes to it indefinitely through
+the write alias, whether or not any ISM policy is ever attached. The `-000001` suffix and the
+template's rollover-alias setting are structural (required so the index *can* be rolled over later)
+and do not themselves enable rollover; neither is a prerequisite you need to undo to run non-rolling.
+
+With no rollover, retention and capacity become the application's own responsibility: documents are
+never dropped automatically, and a single physical index keeps growing. Plan shard count and storage
+for the expected data volume (see [Index template settings](#index-template-settings) above), and
+decide deliberately how you delete or archive data your domain considers obsolete, rather than relying
+on index age.
+
+Verify what's actually applied to a given index with ISM Explain:
+
+```bash
+curl "https://<opensearch-host>/_plugins/_ism/explain/<physical-index>?show_policy=true"
+```
+
+No `policy_id` in the response means no policy is attached — the non-rollover default. See
+[Maintenance target policy check](maintenance-target-policy-check.md) for the required permissions to
+run this on a secured cluster.
+
+### Rollover (opt-in)
+
+Index rollover is a deliberate alternative for applications that need bounded partition size and
+age-based deletion. It is managed entirely server-side by an **OpenSearch ISM (Index State
+Management) policy** configured in IaC — the service itself does not trigger rollover and needs no
+configuration change to support it.
 
 IaC attaches an ISM policy via `ism_template` matching the index pattern (e.g.
 `jme_decree_document_v1-*`) and configures rollover thresholds (e.g. maximum document count or age).
-The index template (including the ISM rollover alias setting) is managed by the service at startup.
+Once attached, subsequent partitions are created automatically by ISM when rollover conditions are
+met; the index template (including the ISM rollover alias setting) continues to be managed by the
+service at startup exactly as in the non-rollover case.
 
-The service creates the initial physical index (`{base}-000001`) on first startup if the write alias
-does not exist yet. Subsequent partitions are created automatically by ISM when rollover conditions
-are met.
+Changing or attaching an ISM policy only affects index creation/rollover going forward — it does not
+retroactively change indices created under a different (or no) policy, and does not merge old
+partitions. Treat any existing index explicitly: check what policy, if any, it already carries (via
+ISM Explain above) before assuming a new policy applies to it.
+
+If a maintenance job's target index is managed by a rollover policy, job creation refuses it — see
+[Maintenance target policy check](maintenance-target-policy-check.md). The maintenance job/task
+indices themselves (`jeap_indexwriter_jobs`/`jeap_indexwriter_tasks`, see
+[Maintenance jobs](maintenance-jobs.md)) must stay outside any rollover/age-based-deletion policy:
+their retention is handled by the service's own housekeeping, and OpenSearch deleting the index out
+from under it would break job/task storage outright.
 
 ## Related
 
