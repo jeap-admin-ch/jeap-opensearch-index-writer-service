@@ -15,4 +15,7 @@ public interface IndexTypeRepository {
 
     @SuppressWarnings("java:S1452")
     Optional<IndexType<?>> findHighestMajorVersion(String originType);
+
+    @SuppressWarnings("java:S1452")
+    List<IndexType<?>> findAllMajorVersions(String originType);
 }

@@ -15,6 +15,13 @@ The document ID is derived from each `OriginReference` returned by the configure
 `ReferenceProvider`. If the provider returns multiple references the operation executes once per
 reference, independently.
 
+`DELETE` does not call the SearchItem Provider, so a delete event is processed even if the object no
+longer exists there. The document is removed via the write alias of every registered major version
+of the index type (e.g. `jme_decree_document_v1_write` and `jme_decree_document_v2_write` during a
+schema migration). A document that does not exist in an index is not an error. If no `IndexType` is
+registered for the index type, the operation fails permanently and the event is forwarded to the
+error handling service.
+
 ## Document structure
 
 Every document written to OpenSearch has the following top-level structure:
@@ -108,11 +115,12 @@ The service calls the endpoint in two ways:
 
 | Caller                                | Request                                                     | Schema major chosen by |
 |---------------------------------------|-------------------------------------------------------------|------------------------|
-| Live events (`MessageIndexingService`) | `index_type`, `origin_id`, optional `origin_version`        | Provider               |
+| Live `UPSERT` events (`MessageIndexingService`) | `index_type`, `origin_id`, optional `origin_version` | Provider   |
 | Maintenance (`CurrentSearchItemFetcher`) | `index_type`, `origin_id`, `index_major_version` | Caller                 |
 
-Live events are unchanged. `origin_version` is the business revision of the object from the
-reference provider. It is never interpreted as a schema major, and maintenance never sends it.
+Live `DELETE` events do not call the endpoint (see [Operations](#operations)). `origin_version` is the
+business revision of the object from the reference provider. It is never interpreted as a schema
+major, and maintenance never sends it.
 
 `CurrentSearchItemFetcher.fetch(baseUri, oauthClientId, indexType, originId)` requests the current
 data of the object for the major of the given `IndexType`. The `IndexType` must be an instance of the

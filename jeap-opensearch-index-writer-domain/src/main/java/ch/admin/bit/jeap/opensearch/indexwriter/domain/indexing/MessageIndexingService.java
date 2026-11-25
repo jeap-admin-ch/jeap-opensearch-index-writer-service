@@ -92,6 +92,14 @@ public class MessageIndexingService {
     }
 
     private void indexForReference(OriginReference originReference, MessageOperationConfig operation) {
+        if (operation.indexOperation() == IndexOperation.UPSERT) {
+            upsert(originReference, operation);
+        } else {
+            delete(originReference, operation);
+        }
+    }
+
+    private void upsert(OriginReference originReference, MessageOperationConfig operation) {
         SearchItemResult searchItemResult = timed(SEARCHITEM_FETCH_TIME_METRICS_NAME, operation,
                 () -> searchItemProvider.findSearchItem(operation.uri(), operation.indexType(), originReference, operation.oauthClientId())
                         .orElseThrow(() -> IndexingException.searchItemNotFound(operation, originReference)));
@@ -99,21 +107,25 @@ public class MessageIndexingService {
         IndexType<?> indexType = indexTypeRepository.findByOriginTypeAndMajorVersion(operation.indexType(), searchItemResult.indexMajorVersion())
                 .orElseThrow(() -> IndexingException.indexTypeNotFound(operation.indexType(), searchItemResult.indexMajorVersion()));
 
-        if (operation.indexOperation() == IndexOperation.UPSERT) {
-            upsert(indexType, originReference, searchItemResult, operation);
-        } else {
-            timedWrite(OPENSEARCH_WRITE_TIME_METRICS_NAME, operation, "delete",
-                    () -> indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id()));
-        }
-    }
-
-    private void upsert(IndexType<?> indexType, OriginReference originReference, SearchItemResult searchItemResult, MessageOperationConfig operation) {
         SearchItemMetadata metadata = new SearchItemMetadata(Instant.now(), searchItemResult.indexMajorVersion(), searchItemResult.indexMinorVersion());
         SearchItemIndexed<?> searchItemIndexed = toSearchItemIndexed(searchItemResult, indexType, metadata);
 
         validateRequiredFields(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed);
         timedWrite(OPENSEARCH_WRITE_TIME_METRICS_NAME, operation, "upsert",
                 () -> indexWriter.upsertSearchItem(indexType.indexWriteAlias(), originReference.id(), searchItemIndexed));
+    }
+
+    // The provider is not asked: the object may already be gone there, and the document may still live in the
+    // index of any registered major (e.g. during a schema migration). Deleting an absent document is a no-op.
+    private void delete(OriginReference originReference, MessageOperationConfig operation) {
+        List<IndexType<?>> indexTypes = indexTypeRepository.findAllMajorVersions(operation.indexType());
+        if (indexTypes.isEmpty()) {
+            throw IndexingException.noIndexTypeRegistered(operation.indexType());
+        }
+        for (IndexType<?> indexType : indexTypes) {
+            timedWrite(OPENSEARCH_WRITE_TIME_METRICS_NAME, operation, "delete",
+                    () -> indexWriter.deleteSearchItem(indexType.indexWriteAlias(), originReference.id()));
+        }
     }
 
     /**

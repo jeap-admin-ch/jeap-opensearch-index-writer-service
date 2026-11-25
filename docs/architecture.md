@@ -72,7 +72,7 @@ flowchart LR
     Listener --> MIS[MessageIndexingService]
     MIS -->|extractReference| RP[ReferenceProvider]
     RP -->|OriginReference| MIS
-    MIS -->|GET SearchItem| Provider[HttpSearchItemProvider]
+    MIS -->|GET SearchItem, UPSERT only| Provider[HttpSearchItemProvider]
     Provider -->|SearchItem| MIS
     MIS -->|validate + enrich| IW[OpenSearchIndexWriter]
     IW -->|UPSERT / DELETE| OS[(OpenSearch)]
@@ -89,10 +89,13 @@ Step by step:
    provider chooses the schema major; the optional `origin_version` of the reference is passed through.
    Maintenance requests the current data in a fixed schema major instead via `CurrentSearchItemFetcher`
    (see [Write operations](write-operations.md#live-events-vs-current-data-in-a-schema-major)).
-4. **Validate and enrich.** The service validates the `SearchItem` fields against the `IndexType`
-   mapping and enriches the document with metadata (`upserted_at`, `major_version`, `minor_version`).
-5. **Write.** `OpenSearchIndexWriter` sends the document to OpenSearch via the `IndexWriteAlias`
-   using `UPSERT` (PUT) or `DELETE`.
+4. **Validate and enrich.** For `UPSERT` operations, the service validates the `SearchItem` fields
+   against the `IndexType` mapping and enriches the document with metadata (`upserted_at`,
+   `major_version`, `minor_version`).
+5. **Write.** For `UPSERT`, `OpenSearchIndexWriter` sends the document to OpenSearch via the
+   `IndexWriteAlias` (PUT). `DELETE` skips steps 3 and 4 and removes the document via the
+   `IndexWriteAlias` of every registered major of the index type, without calling the provider (see
+   [Write operations](write-operations.md#operations)).
 6. **Error handling.** If any step fails, the triggering event is forwarded to the jEAP error
    handling service.
 

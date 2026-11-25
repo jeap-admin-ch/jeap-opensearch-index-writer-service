@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.26.0] - 2026-11-26
+
+### Changed
+- `DELETE` no longer queries the SearchItem Provider; it removes the document from the indices of all registered major versions of the index type, so delete events are processed even if the object no longer exists at the provider. Fails permanently if no `IndexType` is registered for the index type
+
 ## [6.25.0] - 2026-11-25
 
 ### Dependencies

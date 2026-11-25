@@ -8,6 +8,7 @@ the owning domain.
 
 - **Declarative message configuration:** Kafka message types and topics mapped to index operations via `/opensearch/messages.json`
 - **Multiple operations per message:** Any number of UPSERT or DELETE operations per event
+- **Provider-independent deletes:** DELETE removes the document from the indices of all registered major versions of the index type without querying the SearchItem provider, so delete events succeed even if the object is already gone there
 - **Reference provider pattern:** Extracts one or more business object references from each event; all references are processed independently
 - **Conditional execution:** Operations guarded by `IndexingCondition` beans or jEAP feature flags
 - **Schema validation:** SearchItem fields validated against the `IndexType` mapping before every write

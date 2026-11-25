@@ -47,6 +47,7 @@ import java.util.Map;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
@@ -64,6 +65,7 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
     private static final String ORIGIN_ID = "doc-1";
     private static final String INDEX_WRITE_ALIAS = "test_document_v1_write";
     private static final String DELETE_INDEX_WRITE_ALIAS = "test_document_delete_v1_write";
+    private static final String DELETE_V2_INDEX_WRITE_ALIAS = "test_document_delete_v2_write";
     private static final String TRUE_CONDITION_INDEX_WRITE_ALIAS = "test_document_true_condition_v1_write";
     private static final String FALSE_CONDITION_INDEX_WRITE_ALIAS = "test_document_false_condition_v1_write";
     private static final String FEATURE_FLAG_INDEX_WRITE_ALIAS = "test_document_feature_flag_v1_write";
@@ -151,8 +153,9 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
 
         featureManager.disable(IT_FEATURE_FLAG);
 
-        // Pre-create the document so the delete test can verify it is removed
+        // Pre-create the document in both majors so the delete test can verify it is removed from each
         indexDocument(DELETE_INDEX_WRITE_ALIAS, ORIGIN_ID);
+        indexDocument(DELETE_V2_INDEX_WRITE_ALIAS, ORIGIN_ID);
 
         // Ensure all other aliases start without the test document
         deleteDocument(INDEX_WRITE_ALIAS, ORIGIN_ID);
@@ -171,11 +174,20 @@ class IndexWriterIT extends KafkaIntegrationTestBase {
     }
 
     @Test
-    void deleteWithoutConditionTriggersIndexDelete() {
+    void deleteRemovesDocumentFromEveryMajorWithoutQueryingProvider() {
+        // Provider has already removed the object; querying it would fail the delete
+        wireMock.stubFor(get(urlPathEqualTo("/index-api/searchitems"))
+                .withQueryParam("index_type", equalTo("TestDocumentDelete"))
+                .atPriority(1)
+                .willReturn(aResponse().withStatus(404)));
+
         sendSync(TEST_TOPIC, declarationEvent("delete-no-condition"));
 
         await().atMost(Duration.ofMillis(TEST_TIMEOUT))
-                .until(() -> !documentExists(DELETE_INDEX_WRITE_ALIAS, ORIGIN_ID));
+                .until(() -> !documentExists(DELETE_INDEX_WRITE_ALIAS, ORIGIN_ID)
+                        && !documentExists(DELETE_V2_INDEX_WRITE_ALIAS, ORIGIN_ID));
+        wireMock.verify(0, getRequestedFor(urlPathEqualTo("/index-api/searchitems"))
+                .withQueryParam("index_type", equalTo("TestDocumentDelete")));
     }
 
     @Test

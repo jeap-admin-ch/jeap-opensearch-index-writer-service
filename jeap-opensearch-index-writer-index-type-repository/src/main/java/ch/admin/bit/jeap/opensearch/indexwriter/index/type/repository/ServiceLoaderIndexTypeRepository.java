@@ -10,7 +10,12 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.function.BinaryOperator;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Repository
 @Slf4j
@@ -44,6 +49,16 @@ class ServiceLoaderIndexTypeRepository implements IndexTypeRepository {
         return indexTypes.stream()
                 .filter(it -> it.originType().equals(originType))
                 .max(Comparator.<IndexType<?>>comparingInt(IndexType::majorVersion).thenComparingInt(IndexType::minorVersion));
+    }
+
+    @Override
+    @SuppressWarnings("java:S1452")
+    public List<IndexType<?>> findAllMajorVersions(String originType) {
+        Map<Integer, IndexType<?>> highestMinorByMajor = indexTypes.stream()
+                .filter(it -> it.originType().equals(originType))
+                .collect(Collectors.toMap(IndexType::majorVersion, Function.identity(),
+                        BinaryOperator.maxBy(Comparator.comparingInt(IndexType::minorVersion)), TreeMap::new));
+        return List.copyOf(highestMinorByMajor.values());
     }
 
     @Override

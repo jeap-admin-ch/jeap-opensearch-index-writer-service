@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class ServiceLoaderIndexTypeRepositoryTest {
 
@@ -82,6 +83,24 @@ class ServiceLoaderIndexTypeRepositoryTest {
         ServiceLoaderIndexTypeRepository repo = repositoryWith(new TestIndexType(), new OtherIndexTypeV3());
 
         assertThat(repo.findHighestMajorVersion("Unknown")).isEmpty();
+    }
+
+    @Test
+    void findAllMajorVersionsReturnsHighestMinorOfEachMajorOrderedByMajor() throws Exception {
+        ServiceLoaderIndexTypeRepository repo = repositoryWith(new TestIndexTypeV2(1), new TestIndexType(), new TestIndexTypeV2(0),
+                new TestIndexTypeV1Minor1(), new OtherIndexTypeV3());
+
+        List<IndexType<?>> result = repo.findAllMajorVersions("TestDocument");
+
+        assertThat(result).extracting(IndexType::majorVersion, IndexType::minorVersion)
+                .containsExactly(tuple(1, 1), tuple(2, 1));
+    }
+
+    @Test
+    void findAllMajorVersionsReturnsEmptyForUnknownType() throws Exception {
+        ServiceLoaderIndexTypeRepository repo = repositoryWith(new TestIndexType(), new OtherIndexTypeV3());
+
+        assertThat(repo.findAllMajorVersions("Unknown")).isEmpty();
     }
 
     @Test

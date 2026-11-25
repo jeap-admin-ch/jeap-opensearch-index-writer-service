@@ -32,6 +32,7 @@ import org.togglz.core.util.NamedFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -122,17 +123,17 @@ class MessageIndexingServiceTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void deleteFetchesSearchItemToResolveMajorVersionAndCallsWriter() {
+    void deleteRemovesDocumentFromEveryRegisteredMajorWithoutQueryingProvider() {
         stubMessageType("PreziusRegistrationDeleted");
         stubReferenceProvider();
-        stubSearchItemFound();
-        stubIndexType();
+        stubAllMajorVersions("precious-registration-v1-write", "precious-registration-v2-write");
 
         assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.DELETE, null)));
 
-        verify(searchItemProvider).findSearchItem(BASE_URI, INDEX_TYPE, ORIGIN_REF, null);
-        verify(indexWriter).deleteSearchItem(INDEX_WRITE_ALIAS, "id-1");
+        verify(indexWriter).deleteSearchItem("precious-registration-v1-write", "id-1");
+        verify(indexWriter).deleteSearchItem("precious-registration-v2-write", "id-1");
+        verifyNoMoreInteractions(indexWriter);
+        verifyNoInteractions(searchItemProvider);
     }
 
     @Test
@@ -153,15 +154,33 @@ class MessageIndexingServiceTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void deleteThrowsWhenSearchItemNotFound() {
+    void deleteIsPerformedForEachReferenceInEveryRegisteredMajor() {
+        stubMessageType("PreziusRegistrationDeleted");
+        OriginReference ref1 = new OriginReference(INDEX_TYPE, "id-1", null);
+        OriginReference ref2 = new OriginReference(INDEX_TYPE, "id-2", null);
+        when(referenceProvider.extractReference(message)).thenReturn(List.of(ref1, ref2));
+        stubAllMajorVersions("precious-registration-v1-write", "precious-registration-v2-write");
+
+        assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.DELETE, null)));
+
+        verify(indexWriter).deleteSearchItem("precious-registration-v1-write", "id-1");
+        verify(indexWriter).deleteSearchItem("precious-registration-v2-write", "id-1");
+        verify(indexWriter).deleteSearchItem("precious-registration-v1-write", "id-2");
+        verify(indexWriter).deleteSearchItem("precious-registration-v2-write", "id-2");
+        verifyNoMoreInteractions(indexWriter);
+    }
+
+    @Test
+    void deleteThrowsNonRetryableExceptionWhenNoIndexTypeIsRegistered() {
         stubMessageType("PreziusRegistrationDeleted");
         stubReferenceProvider();
-        when(searchItemProvider.findSearchItem(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(indexTypeRepository.findAllMajorVersions(INDEX_TYPE)).thenReturn(List.of());
         var op = operation(IndexOperation.DELETE, null);
 
         assertThatThrownBy(() -> service.index(message, op))
-                .isInstanceOf(IndexingException.class);
+                .isInstanceOfSatisfying(IndexingException.class, e -> assertThat(e.isRetryable()).isFalse())
+                .hasMessageContaining(INDEX_TYPE);
+        verifyNoInteractions(searchItemProvider, indexWriter);
     }
 
     @Test
@@ -329,12 +348,10 @@ class MessageIndexingServiceTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void deleteRecordsIndexingSearchItemFetchAndOpenSearchWriteTimers() {
+    void deleteRecordsIndexingAndOpenSearchWriteTimersButNoSearchItemFetchTimer() {
         stubMessageType("PreziusRegistrationDeleted");
         stubReferenceProvider();
-        stubSearchItemFound();
-        stubIndexType();
+        stubAllMajorVersions(INDEX_WRITE_ALIAS);
 
         assertThatNoException().isThrownBy(() -> service.index(message, operation(IndexOperation.DELETE, null)));
 
@@ -342,9 +359,7 @@ class MessageIndexingServiceTest {
                 .tag("message_type", "PreziusRegistrationDeleted")
                 .tag("operation", "DELETE")
                 .timer().count()).isEqualTo(1);
-        assertThat(meterRegistry.get("jeap.opensearch.indexwriter.searchitem.fetch")
-                .tag("index_type", INDEX_TYPE)
-                .timer().count()).isEqualTo(1);
+        assertThat(meterRegistry.find("jeap.opensearch.indexwriter.searchitem.fetch").timer()).isNull();
         assertThat(meterRegistry.get("jeap.opensearch.indexwriter.opensearch.write")
                 .tag("index_type", INDEX_TYPE)
                 .tag("operation", "delete")
@@ -539,6 +554,16 @@ class MessageIndexingServiceTest {
         when(indexTypeRepository.findByOriginTypeAndMajorVersion(INDEX_TYPE, 1)).thenReturn(Optional.of(indexType));
         when(indexType.indexWriteAlias()).thenReturn(INDEX_WRITE_ALIAS);
         lenient().when(indexType.dataClass()).thenReturn((Class) TypedData.class);
+    }
+
+    private void stubAllMajorVersions(String... indexWriteAliases) {
+        List<IndexType<?>> indexTypes = new ArrayList<>();
+        for (String alias : indexWriteAliases) {
+            IndexType<?> majorIndexType = mock(IndexType.class);
+            when(majorIndexType.indexWriteAlias()).thenReturn(alias);
+            indexTypes.add(majorIndexType);
+        }
+        when(indexTypeRepository.findAllMajorVersions(INDEX_TYPE)).thenReturn(indexTypes);
     }
 
     private void stubMessageType(String typeName) {

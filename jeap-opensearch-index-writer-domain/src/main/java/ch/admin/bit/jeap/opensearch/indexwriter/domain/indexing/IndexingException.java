@@ -28,6 +28,10 @@ public class IndexingException extends IndexWriterException {
         return new IndexingException("No index type found for indexType='" + indexType + "' and major version '" + indexMajorVersion + "'", true);
     }
 
+    public static IndexingException noIndexTypeRegistered(String indexType) {
+        return new IndexingException("No index type registered for indexType='" + indexType + "'", false);
+    }
+
     public static IndexingException searchItemProviderServerError(String baseUri, String indexType, int statusCode) {
         return new IndexingException("Search item provider returned server error " + statusCode + " for " + provider(baseUri, indexType), true);
     }
