@@ -47,10 +47,16 @@ permissions on the configured `job-index` and `task-index` names (the `*` patter
 |-----------------------------------------|----------------------------------------------------------------------|
 | `indices:admin/create`                  | Create the job and task indices on startup if missing.               |
 | `indices:admin/mappings/get`            | Check that existing indices are compatible with the shipped mapping. |
+| `indices:admin/mapping/put`             | Upgrade indices of an older schema version in place on startup.      |
 | `indices:admin/refresh*`                | Make stored tasks visible after batch creation.                      |
-| `indices:data/write/update`             | Conditionally update job state.                                      |
+| `indices:data/read/get`                 | Read a task before it is run.                                        |
+| `indices:data/write/update`             | Conditionally update job and task state.                             |
 | `indices:data/write/delete/byquery`     | Delete the tasks of finished jobs after the retention period.        |
 | `indices:data/read/scroll*`             | Required by delete-by-query.                                         |
+
+Upsert jobs write to the physical index stored with the job (e.g. `jme_decree_document_v1-000001`), not through the write
+alias, and read its `index.uuid` setting before writing. The `*` pattern above covers this; a role restricted to alias names
+must also cover the physical index names with `indices:data/write/index` and `indices:monitor/settings/get`.
 
 ## OpenSearch security role JSON
 

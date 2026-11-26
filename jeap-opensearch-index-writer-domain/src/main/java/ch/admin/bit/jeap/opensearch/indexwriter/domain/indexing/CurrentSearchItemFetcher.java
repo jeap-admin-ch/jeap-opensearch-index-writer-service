@@ -73,7 +73,7 @@ public class CurrentSearchItemFetcher {
                 .orElseThrow(() -> CurrentSearchItemException.notFound(originType, major, originId));
 
         verifyMatches(indexType, originId, result);
-        T data = toTypedData(indexType, originId, result.searchItem().data(), payloadCheck);
+        T data = toTypedData(indexType, originId, result, payloadCheck);
 
         SearchItemMetadata metadata = new SearchItemMetadata(Instant.now(), result.indexMajorVersion(), result.indexMinorVersion());
         return new SearchItem<>(result.searchItem().origin(), data).withMetadata(metadata);
@@ -116,36 +116,43 @@ public class CurrentSearchItemFetcher {
         if (!indexType.originType().equals(result.indexType())) {
             throw mismatch(indexType, originId, "the provider returned index type '%s'".formatted(result.indexType()));
         }
+        // From here on the answer is of the requested index type, so its versions are meaningful for the caller
         if (result.indexMajorVersion() != indexType.majorVersion()) {
-            throw mismatch(indexType, originId, "the provider returned major version %d".formatted(result.indexMajorVersion()));
+            throw mismatch(indexType, originId, result, "the provider returned major version %d".formatted(result.indexMajorVersion()), null);
         }
         if (result.indexMinorVersion() < 0 || result.indexMinorVersion() > indexType.minorVersion()) {
-            throw mismatch(indexType, originId, "the provider returned minor version %d, this writer knows minor versions up to %d"
-                    .formatted(result.indexMinorVersion(), indexType.minorVersion()));
+            throw mismatch(indexType, originId, result, "the provider returned minor version %d, this writer knows minor versions up to %d"
+                    .formatted(result.indexMinorVersion(), indexType.minorVersion()), null);
         }
         SearchItem<JsonNode> searchItem = result.searchItem();
         if (searchItem == null || searchItem.origin() == null || searchItem.data() == null || searchItem.data().isNull()) {
-            throw mismatch(indexType, originId, "the response has no origin or no data");
+            throw mismatch(indexType, originId, result, "the response has no origin or no data", null);
         }
         if (!originId.equals(searchItem.origin().id())) {
-            throw mismatch(indexType, originId, "the provider returned origin id '%s'".formatted(searchItem.origin().id()));
+            throw mismatch(indexType, originId, result, "the provider returned origin id '%s'".formatted(searchItem.origin().id()), null);
         }
     }
 
     // STRICT rejects unknown properties so that a payload of another major cannot be silently squeezed into the
     // requested data class, which may also be shared across minors
-    private <T> T toTypedData(IndexType<T> indexType, String originId, JsonNode data, PayloadCheck payloadCheck) {
+    private <T> T toTypedData(IndexType<T> indexType, String originId, SearchItemResult result, PayloadCheck payloadCheck) {
         JsonMapper mapper = payloadCheck == PayloadCheck.LENIENT ? jsonMapper : strictJsonMapper;
         try {
-            return mapper.readerFor(indexType.dataClass()).readValue(data);
+            return mapper.readerFor(indexType.dataClass()).readValue(result.searchItem().data());
         } catch (JacksonException | IllegalArgumentException e) {
-            throw CurrentSearchItemException.mismatch(indexType.originType(), indexType.majorVersion(), originId,
+            throw mismatch(indexType, originId, result,
                     "the payload does not match data class '%s': %s".formatted(indexType.dataClass().getSimpleName(), e.getMessage()), e);
         }
     }
 
     private static CurrentSearchItemException mismatch(IndexType<?> indexType, String originId, String detail) {
         return CurrentSearchItemException.mismatch(indexType.originType(), indexType.majorVersion(), originId, detail);
+    }
+
+    private static CurrentSearchItemException mismatch(IndexType<?> indexType, String originId, SearchItemResult result,
+                                                       String detail, Throwable cause) {
+        return CurrentSearchItemException.mismatch(indexType.originType(), indexType.majorVersion(), originId, detail,
+                result.indexMajorVersion(), result.indexMinorVersion(), cause);
     }
 
     // Keeps the configured annotation handling but disables @JsonIgnoreProperties(ignoreUnknown = true) and

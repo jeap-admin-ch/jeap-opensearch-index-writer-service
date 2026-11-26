@@ -40,9 +40,13 @@ public final class JobDtos {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"total-references", "materialized-tasks", "open", "succeeded", "failed", "indexing-disabled"})
     public record ReportSummary(@JsonProperty("total-references") int totalReferences,
                                 @JsonProperty("materialized-tasks") int materializedTasks,
-                                int open, int succeeded, int failed) {
+                                int open, int succeeded, int failed,
+                                @JsonProperty("indexing-disabled")
+                                @Schema(description = "Tasks not run because the indexing flag of the job's operation was off; they count as not succeeded")
+                                int indexingDisabled) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -53,13 +57,17 @@ public final class JobDtos {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"task-id", "id", "state", "version", "actual-index-major-version", "actual-index-minor-version",
-            "deletion-outcome", "error"})
-    public record ReportReference(@JsonProperty("task-id") String taskId, String id, String state, String version,
+            "deletion-outcome", "attempts", "error"})
+    public record ReportReference(@JsonProperty("task-id") String taskId, String id,
+                                  @Schema(description = "open, succeeded, failed or indexing-disabled")
+                                  String state, String version,
                                   @JsonProperty("actual-index-major-version")
                                   @Schema(description = "Schema major reported by the provider, only if known; distinct from the submitted version")
                                   Integer actualIndexMajorVersion,
                                   @JsonProperty("actual-index-minor-version") Integer actualIndexMinorVersion,
                                   @JsonProperty("deletion-outcome") String deletionOutcome,
+                                  @Schema(description = "Failed attempts of an open task that is retried after a transient error; error is then its last error")
+                                  Integer attempts,
                                   ReportError error) {
     }
 

@@ -37,6 +37,24 @@ On startup, the service verifies that a consumer contract exists for every messa
 `messages.json`. If the annotation is absent, or if the resolved `appName` does not match
 `spring.application.name`, the service refuses to start with a `NoContractException`.
 
+## Maintenance command contracts
+
+With [maintenance jobs](maintenance-jobs.md) enabled, the service sends an `UpsertSearchItemCommand` per task to itself on
+`jeap.opensearch.indexwriter.maintenance.upsert-command-topic`. As this topic is specific to the service instance, the
+instance declares the producer and the consumer contract for it, e.g. next to the template annotation:
+
+```java
+@JeapMessageConsumerContractsByTemplates(appName = "my-opensearch-index-writer")
+@JeapMessageProducerContract(value = UpsertSearchItemCommand.TypeRef.class, topic = "my-system-upsert-search-item-command")
+@JeapMessageConsumerContract(value = UpsertSearchItemCommand.TypeRef.class, topic = "my-system-upsert-search-item-command")
+@SpringBootApplication
+public class MyOpenSearchIndexWriterApplication {
+}
+```
+
+`UpsertSearchItemCommand` comes from `ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command`, a transitive dependency
+of the service. With maintenance enabled, startup fails if either contract is missing.
+
 ## Related
 
 - [Getting started](getting-started.md)

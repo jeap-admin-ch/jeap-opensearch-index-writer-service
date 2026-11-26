@@ -70,6 +70,7 @@ class UpsertJobController {
               open: 2
               succeeded: 0
               failed: 0
+              indexing-disabled: 0
             originReferences:
             - task-id: 1780f333-a55c-44a9-8732-6ed061c97d57
               id: '12345'
@@ -97,7 +98,8 @@ class UpsertJobController {
     @PreAuthorize("hasRole('upsertjob','create')")
     @Operation(summary = "Submit an upsert job", description = """
             Stores the job and answers right away; one task per origin reference is created in the background
-            (materialized-tasks in the report). The job selects exactly one schema major with
+            (materialized-tasks in the report) and then run asynchronously: the current data of each id in the job's
+            schema major is fetched from the provider and replaces the document in the stored target index. The job selects exactly one schema major with
             operation.indexMajorVersion, the highest configured major if omitted. The reference version is stored and
             reported only, it never selects a schema. Submitting the same job id with equivalent content returns the
             stored job. Required role: upsertjob#create""",

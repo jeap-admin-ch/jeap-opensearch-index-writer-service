@@ -17,14 +17,24 @@ public class CurrentSearchItemException extends IndexWriterException {
     private final String indexType;
     private final int indexMajorVersion;
     private final String originId;
+    // The schema version the provider answered with, if known
+    private final Integer actualIndexMajorVersion;
+    private final Integer actualIndexMinorVersion;
 
     private CurrentSearchItemException(Reason reason, String indexType, int indexMajorVersion, String originId, String detail, Throwable cause) {
+        this(reason, indexType, indexMajorVersion, originId, detail, null, null, cause);
+    }
+
+    private CurrentSearchItemException(Reason reason, String indexType, int indexMajorVersion, String originId, String detail,
+                                       Integer actualIndexMajorVersion, Integer actualIndexMinorVersion, Throwable cause) {
         super("%s for indexType='%s' indexMajorVersion=%d originId='%s': %s"
                 .formatted(reason, indexType, indexMajorVersion, originId, detail), false, cause);
         this.reason = reason;
         this.indexType = indexType;
         this.indexMajorVersion = indexMajorVersion;
         this.originId = originId;
+        this.actualIndexMajorVersion = actualIndexMajorVersion;
+        this.actualIndexMinorVersion = actualIndexMinorVersion;
     }
 
     public static CurrentSearchItemException notFound(String indexType, int indexMajorVersion, String originId) {
@@ -48,5 +58,11 @@ public class CurrentSearchItemException extends IndexWriterException {
 
     public static CurrentSearchItemException mismatch(String indexType, int indexMajorVersion, String originId, String detail, Throwable cause) {
         return new CurrentSearchItemException(Reason.RESPONSE_MISMATCH, indexType, indexMajorVersion, originId, detail, cause);
+    }
+
+    public static CurrentSearchItemException mismatch(String indexType, int indexMajorVersion, String originId, String detail,
+                                                      int actualIndexMajorVersion, int actualIndexMinorVersion, Throwable cause) {
+        return new CurrentSearchItemException(Reason.RESPONSE_MISMATCH, indexType, indexMajorVersion, originId, detail,
+                actualIndexMajorVersion, actualIndexMinorVersion, cause);
     }
 }

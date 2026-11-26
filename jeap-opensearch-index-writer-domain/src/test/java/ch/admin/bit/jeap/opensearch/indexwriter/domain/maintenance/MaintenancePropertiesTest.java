@@ -16,12 +16,36 @@ class MaintenancePropertiesTest {
 
     @Test
     void defaultsAreValid() {
-        assertThat(VALIDATOR.validate(new MaintenanceProperties())).isEmpty();
+        assertThat(VALIDATOR.validate(valid())).isEmpty();
+    }
+
+    @Test
+    void upsertCommandTopicIsRequired() {
+        MaintenanceProperties properties = valid();
+        properties.setUpsertCommandTopic(" ");
+
+        assertThat(paths(VALIDATOR.validate(properties))).containsExactly("upsertCommandTopic");
+    }
+
+    @Test
+    void retryBackoffMustBeOrdered() {
+        MaintenanceProperties properties = valid();
+        properties.setTaskRetryInitialBackoff(Duration.ofHours(1));
+
+        assertThat(paths(VALIDATOR.validate(properties))).containsExactly("retryBackoffOrdered");
+    }
+
+    @Test
+    void nonPositiveMaxAttemptsIsInvalid() {
+        MaintenanceProperties properties = valid();
+        properties.setTaskMaxAttempts(0);
+
+        assertThat(paths(VALIDATOR.validate(properties))).containsExactly("taskMaxAttempts");
     }
 
     @Test
     void nonPositiveBatchSizeIsInvalid() {
-        MaintenanceProperties properties = new MaintenanceProperties();
+        MaintenanceProperties properties = valid();
         properties.setMaterializationBatchSize(0);
 
         assertThat(paths(VALIDATOR.validate(properties))).containsExactly("materializationBatchSize");
@@ -29,9 +53,9 @@ class MaintenancePropertiesTest {
 
     @Test
     void pageSizeLimitsAreChecked() {
-        MaintenanceProperties tooLarge = new MaintenanceProperties();
+        MaintenanceProperties tooLarge = valid();
         tooLarge.setMaxPageSize(10_001);
-        MaintenanceProperties defaultAboveMax = new MaintenanceProperties();
+        MaintenanceProperties defaultAboveMax = valid();
         defaultAboveMax.setDefaultPageSize(2000);
 
         assertThat(paths(VALIDATOR.validate(tooLarge))).containsExactly("maxPageSize");
@@ -40,10 +64,17 @@ class MaintenancePropertiesTest {
 
     @Test
     void nonPositiveDurationIsInvalid() {
-        MaintenanceProperties properties = new MaintenanceProperties();
+        MaintenanceProperties properties = valid();
         properties.setRetention(Duration.ZERO);
 
         assertThat(paths(VALIDATOR.validate(properties))).containsExactly("durationsPositive");
+    }
+
+    // Everything has a default except the topic, which is specific to each service instance
+    private static MaintenanceProperties valid() {
+        MaintenanceProperties properties = new MaintenanceProperties();
+        properties.setUpsertCommandTopic("my-upsert-search-item-command");
+        return properties;
     }
 
     private static Set<String> paths(Set<ConstraintViolation<MaintenanceProperties>> violations) {

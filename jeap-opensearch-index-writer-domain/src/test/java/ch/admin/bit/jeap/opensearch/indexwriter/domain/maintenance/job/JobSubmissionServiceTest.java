@@ -1,6 +1,7 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job;
 
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.JobDispatcher;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.InvalidJobException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.JobReference;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.JobRequest;
@@ -172,7 +173,7 @@ class JobSubmissionServiceTest {
         java.util.List<Runnable> queued = new java.util.ArrayList<>();
         MaintenanceProperties properties = new MaintenanceProperties();
         JobSubmissionService service = new JobSubmissionService(properties, null, null, null, null, storage, storage,
-                new JobClock(java.time.Clock.systemUTC()), queued::add, new JobReferenceCache());
+                new JobClock(java.time.Clock.systemUTC()), queued::add, new JobReferenceCache(), mock(JobDispatcher.class));
 
         service.submit(new JobModel.JobSubmission(jobId, request, null));
         service.submit(new JobModel.JobSubmission(jobId, request, null));
@@ -192,7 +193,7 @@ class JobSubmissionServiceTest {
                 java.time.Instant.now(), null));
         java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
         JobSubmissionService service = new JobSubmissionService(new MaintenanceProperties(), null, null, null, null, storage, storage,
-                new JobClock(java.time.Clock.systemUTC()), task -> attempts.incrementAndGet() > 1 && InMemoryJobStorage.RUN_DIRECTLY.submit(task), new JobReferenceCache());
+                new JobClock(java.time.Clock.systemUTC()), task -> attempts.incrementAndGet() > 1 && InMemoryJobStorage.RUN_DIRECTLY.submit(task), new JobReferenceCache(), mock(JobDispatcher.class));
 
         service.submit(new JobModel.JobSubmission(jobId, request, null));
         service.submit(new JobModel.JobSubmission(jobId, request, null));
@@ -247,12 +248,12 @@ class JobSubmissionServiceTest {
         when(acceptanceCheck.check("decree_document_v1-000001")).thenReturn(new JobTargetAcceptance("decree_document_v1-000001",
                 PolicyCheckOutcome.NO_POLICY_APPLIED, null, "no policy"));
         return new JobSubmissionService(new MaintenanceProperties(), indexTypes, null, resolver, acceptanceCheck, storage, storage,
-                new JobClock(java.time.Clock.systemUTC()), executor, cache);
+                new JobClock(java.time.Clock.systemUTC()), executor, cache, mock(JobDispatcher.class));
     }
 
     private JobSubmissionService serviceWithLimit(int maxReferences) {
         MaintenanceProperties properties = new MaintenanceProperties();
         properties.setMaxReferences(maxReferences);
-        return new JobSubmissionService(properties, null, null, null, null, storage, storage, new JobClock(java.time.Clock.systemUTC()), InMemoryJobStorage.RUN_DIRECTLY, new JobReferenceCache());
+        return new JobSubmissionService(properties, null, null, null, null, storage, storage, new JobClock(java.time.Clock.systemUTC()), InMemoryJobStorage.RUN_DIRECTLY, new JobReferenceCache(), mock(JobDispatcher.class));
     }
 }

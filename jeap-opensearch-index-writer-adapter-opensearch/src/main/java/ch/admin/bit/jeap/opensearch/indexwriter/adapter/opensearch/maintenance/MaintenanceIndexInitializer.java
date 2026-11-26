@@ -16,7 +16,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
 
-// Incompatible indices stop the startup and are never recreated; the instance losing a concurrent creation race verifies the winner's index
+// Incompatible indices stop the startup and are never recreated; the instance losing a concurrent creation race verifies the winner's index.
+// An index of an older schema version is upgraded in place by adding the missing properties, existing documents are not touched.
 @Component
 @ConditionalOnMaintenanceEnabled
 @RequiredArgsConstructor
@@ -25,6 +26,8 @@ class MaintenanceIndexInitializer {
 
     private static final String SETTINGS = "settings";
     private static final String MAPPING_PROPERTIES = "properties";
+    private static final String META = "_meta";
+    private static final String SCHEMA_VERSION = "maintenance_schema_version";
 
     private static final String JOB_MAPPING = "maintenance-index-mappings/job-index.json";
     private static final String TASK_MAPPING = "maintenance-index-mappings/task-index.json";
@@ -69,32 +72,76 @@ class MaintenanceIndexInitializer {
     }
 
     private void verify(String index, JsonNode expected) {
-        MaintenanceStoreClient.Result result = client.execute("GET", "/" + index + "/_mapping", Map.of(), null);
-        if (!result.ok() || result.body().isEmpty()) {
-            throw OpenSearchIndexWriterException.incompatibleMaintenanceIndex(index, "mapping could not be read, HTTP %d".formatted(result.status()));
-        }
-        JsonNode actual = result.body().properties().iterator().next().getValue().path("mappings");
-        int expectedVersion = expected.path("_meta").path("maintenance_schema_version").asInt();
-        int actualVersion = actual.path("_meta").path("maintenance_schema_version").asInt(-1);
-        if (actualVersion != expectedVersion) {
+        JsonNode actual = readMapping(index);
+        int expectedVersion = expected.path(META).path(SCHEMA_VERSION).asInt();
+        int actualVersion = actual.path(META).path(SCHEMA_VERSION).asInt(-1);
+        if (actualVersion < 1) {
             throw OpenSearchIndexWriterException.incompatibleMaintenanceIndex(index, "maintenance_schema_version is %d, expected %d".formatted(actualVersion, expectedVersion));
         }
         if (!"strict".equals(actual.path("dynamic").asString(""))) {
             throw OpenSearchIndexWriterException.incompatibleMaintenanceIndex(index, "dynamic mapping is not strict");
         }
-        String mismatch = firstMismatch("", expected.path(MAPPING_PROPERTIES), actual.path(MAPPING_PROPERTIES));
+        if (actualVersion < expectedVersion) {
+            upgrade(index, expected, actual, actualVersion, expectedVersion);
+            actual = readMapping(index);
+        }
+        // A newer schema version (e.g. after a rollback of the service) is accepted if it has every property this version needs
+        String mismatch = firstMismatch("", expected.path(MAPPING_PROPERTIES), actual.path(MAPPING_PROPERTIES), false);
         if (mismatch != null) {
             throw OpenSearchIndexWriterException.incompatibleMaintenanceIndex(index, mismatch);
         }
     }
 
-    // Additional properties in the existing index are compatible, missing ones or different definitions are not
-    private static String firstMismatch(String path, JsonNode expected, JsonNode actual) {
+    private JsonNode readMapping(String index) {
+        MaintenanceStoreClient.Result result = client.execute("GET", "/" + index + "/_mapping", Map.of(), null);
+        if (!result.ok() || result.body().isEmpty()) {
+            throw OpenSearchIndexWriterException.incompatibleMaintenanceIndex(index, "mapping could not be read, HTTP %d".formatted(result.status()));
+        }
+        return result.body().properties().iterator().next().getValue().path("mappings");
+    }
+
+    // Conflicting definitions stop the startup before anything is changed; concurrent upgrades by several instances are harmless
+    private void upgrade(String index, JsonNode expected, JsonNode actual, int fromVersion, int toVersion) {
+        String conflict = firstMismatch("", expected.path(MAPPING_PROPERTIES), actual.path(MAPPING_PROPERTIES), true);
+        if (conflict != null) {
+            throw OpenSearchIndexWriterException.incompatibleMaintenanceIndex(index, conflict);
+        }
+        ObjectNode body = jsonMapper.createObjectNode();
+        body.putObject(META).put(SCHEMA_VERSION, toVersion);
+        body.set(MAPPING_PROPERTIES, missingProperties(expected.path(MAPPING_PROPERTIES), actual.path(MAPPING_PROPERTIES)));
+        MaintenanceStoreClient.Result result = client.execute("PUT", "/" + index + "/_mapping", Map.of(), body);
+        if (!result.ok()) {
+            throw OpenSearchIndexWriterException.maintenanceIndexUpgradeFailed(index, fromVersion, toVersion, result.status(), result.body());
+        }
+        log.info("Upgraded maintenance index '{}' from schema version {} to {}", index, fromVersion, toVersion);
+    }
+
+    private ObjectNode missingProperties(JsonNode expected, JsonNode actual) {
+        ObjectNode missing = jsonMapper.createObjectNode();
+        for (var field : expected.properties()) {
+            JsonNode actualField = actual.path(field.getKey());
+            if (actualField.isMissingNode()) {
+                missing.set(field.getKey(), field.getValue());
+            } else if (field.getValue().has(MAPPING_PROPERTIES)) {
+                ObjectNode nested = missingProperties(field.getValue().path(MAPPING_PROPERTIES), actualField.path(MAPPING_PROPERTIES));
+                if (!nested.isEmpty()) {
+                    missing.putObject(field.getKey()).set(MAPPING_PROPERTIES, nested);
+                }
+            }
+        }
+        return missing;
+    }
+
+    // Additional properties in the existing index are compatible, different definitions are not; missing ones only if allowed
+    private static String firstMismatch(String path, JsonNode expected, JsonNode actual, boolean missingAllowed) {
         for (var field : expected.properties()) {
             String name = path + field.getKey();
             JsonNode expectedField = field.getValue();
             JsonNode actualField = actual.path(field.getKey());
             if (actualField.isMissingNode()) {
+                if (missingAllowed) {
+                    continue;
+                }
                 return "property '%s' is missing".formatted(name);
             }
             String expectedType = expectedField.path("type").asString("object");
@@ -105,7 +152,7 @@ class MaintenanceIndexInitializer {
             if (expectedField.path("enabled").asBoolean(true) != actualField.path("enabled").asBoolean(true)) {
                 return "property '%s' differs in 'enabled'".formatted(name);
             }
-            String nested = firstMismatch(name + ".", expectedField.path(MAPPING_PROPERTIES), actualField.path(MAPPING_PROPERTIES));
+            String nested = firstMismatch(name + ".", expectedField.path(MAPPING_PROPERTIES), actualField.path(MAPPING_PROPERTIES), missingAllowed);
             if (nested != null) {
                 return nested;
             }

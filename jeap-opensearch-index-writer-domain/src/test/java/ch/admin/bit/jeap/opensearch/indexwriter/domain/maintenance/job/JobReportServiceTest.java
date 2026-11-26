@@ -40,7 +40,7 @@ class JobReportServiceTest {
                         org.assertj.core.groups.Tuple.tuple("b", TaskState.OPEN, "v-b"),
                         org.assertj.core.groups.Tuple.tuple("c", TaskState.OPEN, "v-c"));
         assertThat(report.entries().get(1).taskId()).isEqualTo(JobModel.taskId(job.jobId(), "b"));
-        assertThat(report.summary()).isEqualTo(new ReportSummary(3, 1, 2, 1, 0));
+        assertThat(report.summary()).isEqualTo(new ReportSummary(3, 1, 2, 1, 0, 0));
         assertThat(report.nextCursor()).isNull();
         assertThat(report.reportCreated()).isEqualTo(NOW);
     }
@@ -81,7 +81,7 @@ class JobReportServiceTest {
         assertThat(report.entries()).extracting(ReportEntry::state)
                 .containsExactly(TaskState.SUCCEEDED, TaskState.FAILED, TaskState.FAILED);
         assertThat(report.entries().get(2).error()).isEqualTo(JobReportService.CREATION_REJECTED);
-        assertThat(report.summary()).isEqualTo(new ReportSummary(3, 2, 0, 1, 2));
+        assertThat(report.summary()).isEqualTo(new ReportSummary(3, 2, 0, 1, 2, 0));
     }
 
     @Test
@@ -98,7 +98,7 @@ class JobReportServiceTest {
         assertThat(first.nextCursor()).isEqualTo("2");
         assertThat(second.entries()).extracting(ReportEntry::originId).containsExactly("c");
         assertThat(second.nextCursor()).isNull();
-        assertThat(second.summary()).isEqualTo(new ReportSummary(3, 3, 2, 0, 1));
+        assertThat(second.summary()).isEqualTo(new ReportSummary(3, 3, 2, 0, 1, 0));
     }
 
     @Test
@@ -134,6 +134,25 @@ class JobReportServiceTest {
 
         assertThatThrownBy(() -> service.report(job.jobId(), JobType.UPSERT, null, limit))
                 .isInstanceOf(InvalidJobException.class).hasMessageContaining("limit");
+    }
+
+    @Test
+    void report_countsIndexingDisabledTasksAndShowsTheAttemptsOfRetriedTasks() {
+        Job job = store(upsert("a", "b", "c"), MaterializationState.MATERIALIZED);
+        storage.storeTask(job, 0, TaskState.INDEXING_DISABLED, NOW);
+        storage.storeTask(job, 1, TaskState.SUCCEEDED, NOW);
+        JobModel.JobTask open = JobModel.JobTask.open(job.jobId(), 2, "c", "v-c", NOW);
+        JobModel.TaskError lastError = new JobModel.TaskError("SOURCE_UNAVAILABLE", "HTTP 503", null, null);
+        storage.storeTask(new JobModel.JobTask(open.jobId(), open.taskId(), 2, "c", "v-c", TaskState.OPEN, null, null, null,
+                lastError, NOW, null, 2, NOW.plusSeconds(120), 0, 1));
+
+        JobReport report = service.report(job.jobId(), JobType.UPSERT, null, null);
+
+        assertThat(report.summary()).isEqualTo(new ReportSummary(3, 3, 1, 1, 0, 1));
+        assertThat(report.entries().get(0).state()).isEqualTo(TaskState.INDEXING_DISABLED);
+        assertThat(report.entries().get(0).attempts()).isNull();
+        assertThat(report.entries().get(2).attempts()).isEqualTo(2);
+        assertThat(report.entries().get(2).error()).isEqualTo(lastError);
     }
 
     private Job store(JobModel.JobRequest request, MaterializationState materialization) {

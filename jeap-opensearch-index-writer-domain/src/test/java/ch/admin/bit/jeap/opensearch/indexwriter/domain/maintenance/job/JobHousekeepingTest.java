@@ -1,6 +1,7 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job;
 
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.JobDispatcher;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.Job;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +16,7 @@ import java.util.UUID;
 import static ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.InMemoryJobStorage.job;
 import static ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.InMemoryJobStorage.upsert;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class JobHousekeepingTest {
 
@@ -24,8 +26,8 @@ class JobHousekeepingTest {
     private final MaintenanceProperties properties = new MaintenanceProperties();
     private final JobClock clock = new JobClock(Clock.fixed(NOW, ZoneOffset.UTC));
     private final JobSubmissionService submissionService =
-            new JobSubmissionService(properties, null, null, null, null, storage, storage, clock, InMemoryJobStorage.RUN_DIRECTLY, new JobReferenceCache());
-    private final JobHousekeeping housekeeping = new JobHousekeeping(properties, submissionService, storage, storage, clock);
+            new JobSubmissionService(properties, null, null, null, null, storage, storage, clock, InMemoryJobStorage.RUN_DIRECTLY, new JobReferenceCache(), mock(JobDispatcher.class));
+    private final JobHousekeeping housekeeping = new JobHousekeeping(properties, submissionService, storage, storage, mock(JobDispatcher.class), clock);
 
     @Test
     void completeFinishedJobs_derivesResultFromTaskStates() {
@@ -143,6 +145,24 @@ class JobHousekeepingTest {
 
         assertThat(storage.jobs).containsKey(failing.jobId()).doesNotContainKey(other.jobId());
         assertThat(storage.tasksOf(failing.jobId())).hasSize(1);
+    }
+
+    @Test
+    void completeFinishedJobs_countsIndexingDisabledTasksAsNotSucceeded() {
+        Job partially = materialized(upsert("a", "b"));
+        storage.storeTask(partially, 0, TaskState.SUCCEEDED, NOW.minusSeconds(10));
+        storage.storeTask(partially, 1, TaskState.INDEXING_DISABLED, NOW.minusSeconds(10));
+        Job allDisabled = materialized(upsert("a"));
+        storage.storeTask(allDisabled, 0, TaskState.INDEXING_DISABLED, NOW.minusSeconds(10));
+        Job failedAndDisabled = materialized(upsert("a", "b"));
+        storage.storeTask(failedAndDisabled, 0, TaskState.FAILED, NOW.minusSeconds(10));
+        storage.storeTask(failedAndDisabled, 1, TaskState.INDEXING_DISABLED, NOW.minusSeconds(10));
+
+        housekeeping.completeFinishedJobs();
+
+        assertCompleted(partially, JobResult.PARTIALLY_SUCCEEDED, NOW.minusSeconds(10));
+        assertCompleted(allDisabled, JobResult.FAILED, NOW.minusSeconds(10));
+        assertCompleted(failedAndDisabled, JobResult.FAILED, NOW.minusSeconds(10));
     }
 
     private Job materialized(JobModel.JobRequest request) {

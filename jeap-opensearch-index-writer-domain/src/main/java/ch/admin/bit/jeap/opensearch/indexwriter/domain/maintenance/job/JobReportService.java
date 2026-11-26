@@ -53,9 +53,10 @@ public class JobReportService {
         }
 
         TaskCounts counts = taskRepository.counts(jobId);
-        int failed = creationFailed ? job.expectedTaskCount() - counts.succeeded() : counts.failed();
+        int failed = creationFailed ? job.expectedTaskCount() - counts.succeeded() - counts.indexingDisabled() : counts.failed();
         ReportSummary summary = new ReportSummary(job.expectedTaskCount(), counts.total(),
-                job.expectedTaskCount() - counts.succeeded() - failed, counts.succeeded(), failed);
+                job.expectedTaskCount() - counts.succeeded() - failed - counts.indexingDisabled(), counts.succeeded(), failed,
+                counts.indexingDisabled());
         return new JobReport(job, clock.now(), summary, entries, limit, to < job.expectedTaskCount() ? Integer.toString(to) : null);
     }
 
@@ -92,16 +93,17 @@ public class JobReportService {
         boolean upsert = type == JobType.UPSERT;
         return new ReportEntry(task.taskId(), task.originId(), upsert ? task.referenceVersion() : null, task.state(),
                 upsert ? task.actualIndexMajorVersion() : null, upsert ? task.actualIndexMinorVersion() : null,
-                upsert ? null : task.deletionOutcome(), task.error());
+                upsert ? null : task.deletionOutcome(), task.error(),
+                task.state() == TaskState.OPEN && task.attempts() > 0 ? task.attempts() : null);
     }
 
     private static ReportEntry asCreationFailed(ReportEntry entry) {
         return new ReportEntry(entry.taskId(), entry.originId(), entry.version(), TaskState.FAILED,
-                entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.deletionOutcome(), CREATION_REJECTED);
+                entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.deletionOutcome(), CREATION_REJECTED, null);
     }
 
     private static ReportEntry unmaterializedEntry(UUID jobId, JobReference reference, JobType type) {
         return new ReportEntry(JobModel.taskId(jobId, reference.id()), reference.id(),
-                type == JobType.UPSERT ? reference.version() : null, TaskState.OPEN, null, null, null, null);
+                type == JobType.UPSERT ? reference.version() : null, TaskState.OPEN, null, null, null, null, null);
     }
 }

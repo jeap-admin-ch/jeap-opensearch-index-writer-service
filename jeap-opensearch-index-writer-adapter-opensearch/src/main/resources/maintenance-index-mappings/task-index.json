@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "maintenance_schema_version": 1
+      "maintenance_schema_version": 2
     },
     "properties": {
       "job_id": {"type": "keyword"},
@@ -21,6 +21,8 @@
       "task_state": {"type": "keyword"},
       "created_at": {"type": "date"},
       "completed_at": {"type": "date"},
+      "attempts": {"type": "integer"},
+      "next_attempt_at": {"type": "date"},
       "error": {
         "type": "object",
         "properties": {

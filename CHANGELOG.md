@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.28.0] - 2026-11-26
+
+### Added
+- Upsert maintenance jobs are run: one `UpsertSearchItemCommand` per task, the current data of the job's schema major replaces or creates the document in the stored target index (see docs/maintenance-jobs.md)
+- Task state `indexing-disabled` for tasks whose UPSERT operation flag is off; counts as not succeeded
+- Transient provider and OpenSearch errors are retried with back-off up to `task-max-attempts`; stalled jobs are dispatched again
+- Metrics `jeap.opensearch.indexwriter.maintenance.task` and `jeap.opensearch.indexwriter.maintenance.commands`
+
+### Changed
+- With maintenance enabled, `jeap.opensearch.indexwriter.maintenance.upsert-command-topic` and the producer/consumer contracts for `UpsertSearchItemCommand` are required
+- Job and task indices are upgraded in place to schema version 2 on startup; requires `indices:admin/mapping/put` on both indices
+- Upsert jobs stored by 6.24.0 and 6.25.0 start running after the upgrade
+
+### Fixed
+- Prevent retry dispatch from invalidating task outcomes; redeliver unresolved result conflicts
+- Redeliver maintenance commands when storage rejects reads or result updates, including write blocks and missing permissions
+- Record exhausted maintenance retries as failed in task metrics
+
 ## [6.27.0] - 2026-11-26
 
 ### Dependencies

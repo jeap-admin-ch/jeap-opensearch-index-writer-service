@@ -2,6 +2,7 @@ package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job;
 
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.ConditionalOnMaintenanceEnabled;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.JobDispatcher;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageUnavailableException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.Job;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.TaskCounts;
@@ -29,10 +30,12 @@ public class JobHousekeeping {
     private final JobSubmissionService submissionService;
     private final JobRepository jobRepository;
     private final TaskRepository taskRepository;
+    private final JobDispatcher dispatcher;
     private final JobClock clock;
 
     public void run() {
         step("resume task creation", this::resumeMaterialization);
+        step("send task commands", this::dispatchCommands);
         step("complete jobs", this::completeFinishedJobs);
         step("delete expired jobs", this::deleteExpiredJobs);
     }
@@ -54,10 +57,15 @@ public class JobHousekeeping {
                 }));
     }
 
+    // Resumes interrupted dispatches, sends due retries and the commands of stalled jobs again
+    public void dispatchCommands() {
+        forEachCandidate(after -> jobRepository.findOpenMaterialized(after, BATCH), dispatcher::dispatch);
+    }
+
     public void completeFinishedJobs() {
         forEachCandidate(after -> jobRepository.findOpenMaterialized(after, BATCH), job -> {
             TaskCounts counts = taskRepository.counts(job.jobId());
-            if (counts.total() != job.expectedTaskCount() || counts.succeeded() + counts.failed() != job.expectedTaskCount()) {
+            if (counts.total() != job.expectedTaskCount() || counts.finished() != job.expectedTaskCount()) {
                 return;
             }
             JobResult result = resultOf(counts);
@@ -96,8 +104,9 @@ public class JobHousekeeping {
         } while (jobs.size() == BATCH);
     }
 
+    // Tasks ended as indexing-disabled count as not succeeded
     private static JobResult resultOf(TaskCounts counts) {
-        if (counts.failed() == 0) {
+        if (counts.succeeded() == counts.total()) {
             return JobResult.SUCCEEDED;
         }
         return counts.succeeded() == 0 ? JobResult.FAILED : JobResult.PARTIALLY_SUCCEEDED;

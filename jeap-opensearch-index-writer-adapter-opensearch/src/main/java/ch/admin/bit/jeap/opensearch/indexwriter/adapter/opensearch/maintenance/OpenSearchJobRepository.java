@@ -28,6 +28,10 @@ class OpenSearchJobRepository implements JobRepository {
 
     private static final String REFRESH = "refresh";
     private static final String INDEX_MAJOR_VERSION = "indexMajorVersion";
+    private static final String DISPATCH_CURSOR = "dispatch_cursor";
+    private static final String DISPATCH_OWNER = "dispatch_owner";
+    private static final String DISPATCH_LEASE_UNTIL = "dispatch_lease_until";
+    private static final String DISPATCHED_AT = "dispatched_at";
 
     private static final String EXCLUDE_REFERENCES = "request.originReferences";
     private static final String VISIBLE = "wait_for";
@@ -115,16 +119,51 @@ class OpenSearchJobRepository implements JobRepository {
         }
     }
 
+    // Not made visible to searches right away: the housekeeping reads the dispatch state with the next run at the earliest
+    @Override
+    public Optional<Job> updateDispatch(Job job, Dispatch dispatch) {
+        ObjectNode doc = jsonMapper.createObjectNode();
+        putDispatch(doc, dispatch);
+        MaintenanceStoreClient.Result result = update(job, doc, Map.of());
+        if (result == null) {
+            return Optional.empty();
+        }
+        return Optional.of(job.withDispatch(dispatch, result.body().path("_seq_no").asLong(), result.body().path("_primary_term").asLong()));
+    }
+
     private boolean conditionalUpdate(Job job, ObjectNode doc) {
+        return update(job, doc, Map.of(REFRESH, VISIBLE)) != null;
+    }
+
+    // null if the job changed in the meantime or no longer exists
+    private MaintenanceStoreClient.Result update(Job job, ObjectNode doc, Map<String, String> extraQuery) {
         ObjectNode body = jsonMapper.createObjectNode();
         body.set("doc", doc);
-        MaintenanceStoreClient.Result result = client.execute("POST", "/" + index() + "/_update/" + job.jobId(),
-                Map.of("if_seq_no", Long.toString(job.seqNo()), "if_primary_term", Long.toString(job.primaryTerm()), REFRESH, VISIBLE), body);
+        Map<String, String> query = new HashMap<>(extraQuery);
+        query.put("if_seq_no", Long.toString(job.seqNo()));
+        query.put("if_primary_term", Long.toString(job.primaryTerm()));
+        MaintenanceStoreClient.Result result = client.execute("POST", "/" + index() + "/_update/" + job.jobId(), query, body);
         if (result.status() == 409 || isDocumentMissing(result)) {
-            return false;
+            return null;
         }
         requireOk(result, "update job " + job.jobId());
-        return true;
+        return result;
+    }
+
+    private static void putDispatch(ObjectNode doc, Dispatch dispatch) {
+        doc.put(DISPATCH_CURSOR, dispatch.cursor());
+        doc.put(DISPATCH_OWNER, dispatch.owner());
+        putInstant(doc, DISPATCH_LEASE_UNTIL, dispatch.leaseUntil());
+        putInstant(doc, DISPATCHED_AT, dispatch.dispatchedAt());
+    }
+
+    // Writes null explicitly, so that a partial update clears the field
+    private static void putInstant(ObjectNode doc, String field, Instant value) {
+        if (value == null) {
+            doc.putNull(field);
+        } else {
+            doc.put(field, value.truncatedTo(ChronoUnit.MILLIS).toString());
+        }
     }
 
     private List<Job> search(ObjectNode query, Job after, int limit) {
@@ -180,6 +219,7 @@ class OpenSearchJobRepository implements JobRepository {
         doc.put("target_index", target.physicalIndex());
         putIfPresent(doc, "target_index_uuid", target.physicalIndexUuid());
         doc.put("rollover_detection", target.rolloverDetection());
+        putDispatch(doc, job.dispatch());
         return doc;
     }
 
@@ -202,6 +242,9 @@ class OpenSearchJobRepository implements JobRepository {
                 source.path("expected_task_count").asInt(), Wire.parse(MaterializationState.class, text(source, MATERIALIZATION_STATE)),
                 instant(source, STARTED_AT), instant(source, COMPLETED_AT),
                 new SubmittedBy(text(submittedBy, "name"), text(submittedBy, "ext_id")), request, target,
+                // Jobs stored before schema version 2 have no dispatch fields: nothing was sent for them yet
+                new Dispatch(source.path(DISPATCH_CURSOR).asInt(0), text(source, DISPATCH_OWNER),
+                        instant(source, DISPATCH_LEASE_UNTIL), instant(source, DISPATCHED_AT)),
                 hit.path("_seq_no").asLong(), hit.path("_primary_term").asLong());
     }
 

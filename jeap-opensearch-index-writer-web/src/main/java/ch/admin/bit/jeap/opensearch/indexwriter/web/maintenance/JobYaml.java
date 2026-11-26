@@ -99,7 +99,7 @@ class JobYaml {
         List<ReportReference> references = new ArrayList<>(report.entries().size());
         for (ReportEntry entry : report.entries()) {
             references.add(new ReportReference(entry.taskId().toString(), entry.originId(), Wire.of(entry.state()), entry.version(),
-                    entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.deletionOutcome(),
+                    entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.deletionOutcome(), entry.attempts(),
                     entry.error() == null ? null : new ReportError(entry.error().code(), entry.error().message(),
                             entry.error().targetIndex(), entry.error().traceId())));
         }
@@ -116,7 +116,8 @@ class JobYaml {
                 report.reportCreated().truncatedTo(ChronoUnit.SECONDS).toString(),
                 job.submittedBy().name(), job.submittedBy().extId(),
                 new JobDtos.ReportSummary(report.summary().totalReferences(), report.summary().materializedTasks(),
-                        report.summary().open(), report.summary().succeeded(), report.summary().failed()),
+                        report.summary().open(), report.summary().succeeded(), report.summary().failed(),
+                        report.summary().indexingDisabled()),
                 references, new ReportPage(report.limit(), references.size(), report.nextCursor()),
                 new ReportTarget(Wire.of(target.selection()), target.indexMajorVersion(), target.physicalIndex(), target.rolloverDetection()),
                 Wire.of(job.result()),

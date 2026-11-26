@@ -9,17 +9,17 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.Predicate;
 
-class InMemoryJobStorage implements JobRepository, TaskRepository {
+public class InMemoryJobStorage implements JobRepository, TaskRepository {
 
-    static final MaterializationExecutor RUN_DIRECTLY = task -> {
+    public static final MaterializationExecutor RUN_DIRECTLY = task -> {
         task.run();
         return true;
     };
 
     private static final Comparator<Job> ORDER = Comparator.comparing(Job::startedAt).thenComparing(j -> j.jobId().toString());
 
-    final Map<UUID, Job> jobs = new HashMap<>();
-    final Map<UUID, JobTask> tasks = new HashMap<>();
+    public final Map<UUID, Job> jobs = new HashMap<>();
+    public final Map<UUID, JobTask> tasks = new HashMap<>();
     final Set<UUID> failingTaskDeletes = new HashSet<>();
     int fullReads;
     boolean rejectRefresh;
@@ -27,35 +27,43 @@ class InMemoryJobStorage implements JobRepository, TaskRepository {
     Job concurrentlyCreated;
     final Set<UUID> rejectedTaskCreations = new HashSet<>();
 
-    static Job job(UUID jobId, JobRequest request, JobState state, MaterializationState materialization,
+    public static Job job(UUID jobId, JobRequest request, JobState state, MaterializationState materialization,
                    Instant startedAt, Instant completedAt) {
         JobTarget target = new JobTarget(MajorSelection.EXPLICIT, 1, "index_v1-000001", "uuid", JobTarget.ROLLOVER_NOT_DETECTED);
         return new Job(jobId, JobSubmissionService.requestHash(request), state, null, request.references().size(), materialization,
-                startedAt, completedAt, new SubmittedBy("tester", null), request, target, 0, 1);
+                startedAt, completedAt, new SubmittedBy("tester", null), request, target, Dispatch.NONE, 0, 1);
     }
 
-    static JobRequest upsert(String... ids) {
+    public static JobRequest upsert(String... ids) {
         return new JobRequest(JobType.UPSERT, "Msg", "topic", "DecreeDocument", 1,
                 Arrays.stream(ids).map(id -> new JobReference(id, "v-" + id)).toList());
     }
 
-    static JobRequest delete(String... ids) {
+    public static JobRequest delete(String... ids) {
         return new JobRequest(JobType.DELETE, null, null, "DecreeDocument", 1,
                 Arrays.stream(ids).map(id -> new JobReference(id, null)).toList());
     }
 
-    void store(Job job) {
+    public void store(Job job) {
         jobs.put(job.jobId(), job);
     }
 
-    void storeTask(Job job, int position, TaskState state, Instant completedAt) {
+    public void storeTask(Job job, int position, TaskState state, Instant completedAt) {
         JobReference reference = job.request().references().get(position);
         UUID taskId = JobModel.taskId(job.jobId(), reference.id());
         tasks.put(taskId, new JobTask(job.jobId(), taskId, position, reference.id(), reference.version(), state,
-                null, null, null, null, job.startedAt(), completedAt));
+                null, null, null, null, job.startedAt(), completedAt, 0, null, 0, 1));
     }
 
-    List<JobTask> tasksOf(UUID jobId) {
+    public void storeTask(JobTask task) {
+        tasks.put(task.taskId(), task);
+    }
+
+    public JobTask task(Job job, int position) {
+        return tasks.get(JobModel.taskId(job.jobId(), job.request().references().get(position).id()));
+    }
+
+    public List<JobTask> tasksOf(UUID jobId) {
         return tasks.values().stream().filter(t -> t.jobId().equals(jobId)).sorted(Comparator.comparingInt(JobTask::position)).toList();
     }
 
@@ -138,7 +146,8 @@ class InMemoryJobStorage implements JobRepository, TaskRepository {
         List<JobTask> ofJob = tasksOf(jobId);
         Instant last = ofJob.stream().map(JobTask::completedAt).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null);
         return new TaskCounts(ofJob.size(), (int) ofJob.stream().filter(t -> t.state() == TaskState.SUCCEEDED).count(),
-                (int) ofJob.stream().filter(t -> t.state() == TaskState.FAILED).count(), last);
+                (int) ofJob.stream().filter(t -> t.state() == TaskState.FAILED).count(),
+                (int) ofJob.stream().filter(t -> t.state() == TaskState.INDEXING_DISABLED).count(), last);
     }
 
     @Override
@@ -147,6 +156,67 @@ class InMemoryJobStorage implements JobRepository, TaskRepository {
             throw new JobTasksNotDeletedException("simulated version conflict");
         }
         tasks.values().removeIf(t -> t.jobId().equals(jobId));
+    }
+
+    @Override
+    public Optional<Job> updateDispatch(Job job, Dispatch dispatch) {
+        Job current = jobs.get(job.jobId());
+        if (current == null || current.seqNo() != job.seqNo()) {
+            return Optional.empty();
+        }
+        Job updated = current.withDispatch(dispatch, current.seqNo() + 1, current.primaryTerm());
+        jobs.put(updated.jobId(), updated);
+        return Optional.of(job.withDispatch(dispatch, updated.seqNo(), updated.primaryTerm()));
+    }
+
+    @Override
+    public Optional<JobTask> find(UUID taskId) {
+        return Optional.ofNullable(tasks.get(taskId));
+    }
+
+    @Override
+    public boolean complete(JobTask task, TaskState state, Integer actualIndexMajorVersion, Integer actualIndexMinorVersion,
+                            TaskError error, Instant completedAt) {
+        return updateTask(task, t -> new JobTask(t.jobId(), t.taskId(), t.position(), t.originId(), t.referenceVersion(), state,
+                actualIndexMajorVersion, actualIndexMinorVersion, t.deletionOutcome(), error, t.createdAt(), completedAt,
+                t.attempts(), null, t.seqNo() + 1, t.primaryTerm()));
+    }
+
+    @Override
+    public boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, TaskError lastError) {
+        return updateTask(task, t -> new JobTask(t.jobId(), t.taskId(), t.position(), t.originId(), t.referenceVersion(), t.state(),
+                t.actualIndexMajorVersion(), t.actualIndexMinorVersion(), t.deletionOutcome(), lastError, t.createdAt(),
+                t.completedAt(), attempts, nextAttemptAt, t.seqNo() + 1, t.primaryTerm()));
+    }
+
+    @Override
+    public void clearScheduledRetries(List<JobTask> cleared) {
+        cleared.forEach(task -> updateTask(task, t -> new JobTask(t.jobId(), t.taskId(), t.position(), t.originId(),
+                t.referenceVersion(), t.state(), t.actualIndexMajorVersion(), t.actualIndexMinorVersion(), t.deletionOutcome(),
+                t.error(), t.createdAt(), t.completedAt(), t.attempts(), null, t.seqNo() + 1, t.primaryTerm())));
+    }
+
+    @Override
+    public List<JobTask> findDueRetries(UUID jobId, Instant dueAt, int afterPosition, int limit) {
+        return tasksOf(jobId).stream()
+                .filter(t -> t.state() == TaskState.OPEN && t.nextAttemptAt() != null && !t.nextAttemptAt().isAfter(dueAt))
+                .filter(t -> t.position() > afterPosition).limit(limit).toList();
+    }
+
+    @Override
+    public List<JobTask> findOpenUnscheduled(UUID jobId, int afterPosition, int limit) {
+        return tasksOf(jobId).stream()
+                .filter(t -> t.state() == TaskState.OPEN && t.nextAttemptAt() == null)
+                .filter(t -> t.position() > afterPosition).limit(limit).toList();
+    }
+
+    private boolean updateTask(JobTask expected, java.util.function.UnaryOperator<JobTask> change) {
+        JobTask current = tasks.get(expected.taskId());
+        if (current == null || current.seqNo() != expected.seqNo()) {
+            return false;
+        }
+        tasks.put(current.taskId(), change.apply(current));
+        return true;
     }
 
     private List<Job> page(Predicate<Job> filter, Job after, int limit) {
@@ -168,7 +238,8 @@ class InMemoryJobStorage implements JobRepository, TaskRepository {
     private Job copy(Job job, JobState state, JobResult result, MaterializationState materialization, Instant completedAt,
                      JobRequest request) {
         JobRequest stored = request != null ? request : jobs.getOrDefault(job.jobId(), job).request();
+        Dispatch dispatch = jobs.getOrDefault(job.jobId(), job).dispatch();
         return new Job(job.jobId(), job.requestHash(), state, result, job.expectedTaskCount(), materialization, job.startedAt(),
-                completedAt, job.submittedBy(), stored, job.target(), job.seqNo() + (request == null ? 1 : 0), job.primaryTerm());
+                completedAt, job.submittedBy(), stored, job.target(), dispatch, job.seqNo() + (request == null ? 1 : 0), job.primaryTerm());
     }
 }

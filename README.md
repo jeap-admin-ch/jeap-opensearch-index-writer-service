@@ -17,6 +17,7 @@ the owning domain.
 - **Native analysis:** IndexType-owned analyzers, normalizers, tokenizers, and filters combined with operational settings; deployed compatibility checked before template updates
 - **Current data in a schema major:** `CurrentSearchItemFetcher` requests an object's current data for a fixed schema major and verifies index type, major, minor and payload before it may be written
 - **Maintenance target policy check:** `JobTargetAcceptanceCheck` refuses a maintenance job target whose applied ISM policy contains a rollover action (`not-allowed`), checked once at job creation
+- **Maintenance upsert jobs:** opt-in YAML API whose upsert jobs replace or restore documents with the current data of their schema major, run asynchronously via Kafka commands with retries, recovery and durable results before acknowledgement
 - **Error handling:** Failed operations forwarded to the jEAP error handling service
 
 ## Documentation
@@ -30,7 +31,7 @@ the owning domain.
 - [Startup behaviour](docs/startup-behaviour.md)
 - [Write operations](docs/write-operations.md)
 - [Maintenance job target policy check](docs/maintenance-target-policy-check.md)
-- [Maintenance jobs (YAML API, storage, retention)](docs/maintenance-jobs.md)
+- [Maintenance jobs (YAML API, execution, storage, retention)](docs/maintenance-jobs.md)
 - [OpenSearch permissions](docs/opensearch-permissions.md)
 - [Consumer contracts](docs/consumer-contracts.md)
 - [Metrics](docs/metrics.md)

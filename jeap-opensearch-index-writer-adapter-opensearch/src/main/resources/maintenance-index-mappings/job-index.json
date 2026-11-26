@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "maintenance_schema_version": 1
+      "maintenance_schema_version": 2
     },
     "properties": {
       "job_id": {"type": "keyword"},
@@ -29,7 +29,11 @@
       "resolved_index_major_version": {"type": "integer"},
       "target_index": {"type": "keyword"},
       "target_index_uuid": {"type": "keyword"},
-      "rollover_detection": {"type": "keyword"}
+      "rollover_detection": {"type": "keyword"},
+      "dispatch_cursor": {"type": "integer"},
+      "dispatch_owner": {"type": "keyword"},
+      "dispatch_lease_until": {"type": "date"},
+      "dispatched_at": {"type": "date"}
     }
   }
 }

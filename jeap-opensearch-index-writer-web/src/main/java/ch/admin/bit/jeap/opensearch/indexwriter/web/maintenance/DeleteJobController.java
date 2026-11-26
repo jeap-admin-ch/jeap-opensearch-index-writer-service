@@ -59,6 +59,7 @@ class DeleteJobController {
               open: 2
               succeeded: 0
               failed: 0
+              indexing-disabled: 0
             originReferences:
             - task-id: c19c04b7-cb22-4323-ad5d-fab96f6bfec8
               id: '12345'

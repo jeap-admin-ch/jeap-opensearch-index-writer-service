@@ -38,6 +38,9 @@ public final class JobStorage {
         List<Job> findCompletedBefore(Instant completedBefore, Job after, int limit);
 
         void delete(UUID jobId);
+
+        // Conditional on the job version: empty if the job changed in the meantime, otherwise the updated job
+        Optional<Job> updateDispatch(Job job, Dispatch dispatch);
     }
 
     public interface TaskRepository {
@@ -53,6 +56,24 @@ public final class JobStorage {
 
         // Throws if not every task of the job could be deleted, so that the job itself is kept and retried
         void deleteByJobId(UUID jobId);
+
+        // Reads the current version (realtime, independent of the refresh)
+        Optional<JobTask> find(UUID taskId);
+
+        // The update methods are conditional on the task version: false if the task changed in the meantime
+        boolean complete(JobTask task, TaskState state, Integer actualIndexMajorVersion, Integer actualIndexMinorVersion,
+                         TaskError error, Instant completedAt);
+
+        boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, TaskError lastError);
+
+        // Clear before publishing so that dispatch cannot invalidate the task version read by the consumer
+        void clearScheduledRetries(List<JobTask> tasks);
+
+        // Open tasks whose scheduled retry is due, in position order after the given position
+        List<JobTask> findDueRetries(UUID jobId, Instant dueAt, int afterPosition, int limit);
+
+        // Open tasks without a scheduled retry, in position order after the given position
+        List<JobTask> findOpenUnscheduled(UUID jobId, int afterPosition, int limit);
     }
 
     public interface JobTargetResolver {

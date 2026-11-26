@@ -6,7 +6,7 @@ spring:
     allow-bean-definition-overriding: true
   autoconfigure:
     exclude:
-      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+      - org.springframework.boot.security.oauth2.server.resource.autoconfigure.OAuth2ResourceServerAutoConfiguration
   security:
     oauth2:
       client:
@@ -30,6 +30,8 @@ jeap:
           number-of-shards: 1
           number-of-replicas: 0
           refresh-interval: "1s"
+      maintenance:
+        upsert-command-topic: it-upsert-search-item-command
 
 logging:
   level:

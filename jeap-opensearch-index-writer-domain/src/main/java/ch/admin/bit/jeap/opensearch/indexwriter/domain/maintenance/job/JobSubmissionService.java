@@ -10,6 +10,7 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenancePr
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.acceptance.JobTargetAcceptance;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.acceptance.JobTargetAcceptanceCheck;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.acceptance.PolicyCheckOutcome;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.JobDispatcher;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.InvalidJobException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobConflictException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageRejectedException;
@@ -47,6 +48,7 @@ public class JobSubmissionService {
     private final JobClock clock;
     private final MaterializationExecutor materializationExecutor;
     private final JobReferenceCache referenceCache;
+    private final JobDispatcher dispatcher;
     private final Set<UUID> inProgress = ConcurrentHashMap.newKeySet();
 
     public Job submit(JobSubmission submission) {
@@ -64,7 +66,7 @@ public class JobSubmissionService {
         IndexType<?> indexType = resolveIndexType(request);
         JobTarget target = resolveTarget(request, indexType);
         Job job = new Job(submission.jobId(), requestHash, JobState.OPEN, null, request.references().size(),
-                MaterializationState.MATERIALIZING, clock.now(), null, submission.submittedBy(), request, target, 0, 0);
+                MaterializationState.MATERIALIZING, clock.now(), null, submission.submittedBy(), request, target, Dispatch.NONE, 0, 0);
         if (!jobRepository.create(job)) {
             Job concurrent = jobRepository.find(submission.jobId(), false).orElseThrow(() -> new JobConflictException(submission.jobId()));
             return resumeExisting(concurrent, requestHash);
@@ -114,8 +116,7 @@ public class JobSubmissionService {
                 List<JobTask> batch = new ArrayList<>(to - from);
                 for (int position = from; position < to; position++) {
                     JobReference reference = references.get(position);
-                    batch.add(new JobTask(job.jobId(), JobModel.taskId(job.jobId(), reference.id()), position, reference.id(),
-                            reference.version(), TaskState.OPEN, null, null, null, null, createdAt, null));
+                    batch.add(JobTask.open(job.jobId(), position, reference.id(), reference.version(), createdAt));
                 }
                 taskRepository.createMissing(batch);
             }
@@ -124,7 +125,18 @@ public class JobSubmissionService {
         } catch (JobStorageRejectedException e) {
             return failMaterialization(job, e);
         }
-        return jobRepository.find(job.jobId(), false).orElse(job);
+        Job materialized = jobRepository.find(job.jobId(), false).orElse(job);
+        dispatch(materialized);
+        return materialized;
+    }
+
+    // Started right away so that a job does not wait for the next housekeeping run, which also resumes a failed dispatch
+    private void dispatch(Job job) {
+        try {
+            dispatcher.dispatch(job);
+        } catch (RuntimeException e) {
+            log.warn("Sending the commands of job {} failed, the housekeeping resumes it", job.jobId(), e);
+        }
     }
 
     // Retrying a rejected batch can never succeed, the job is ended so that it is visible as failed and cleaned up

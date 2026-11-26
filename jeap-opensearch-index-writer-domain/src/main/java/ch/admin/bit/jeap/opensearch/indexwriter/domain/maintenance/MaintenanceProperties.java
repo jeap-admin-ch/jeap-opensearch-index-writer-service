@@ -89,14 +89,68 @@ public class MaintenanceProperties {
      */
     private Duration materializationResumeAfter = Duration.ofMinutes(10);
 
+    /**
+     * Topic of the UpsertSearchItemCommand the service sends to itself, one per task. Must be specific to the service
+     * instance: a topic shared with another system's index writer would deliver its commands to this one.
+     */
+    @NotBlank
+    private String upsertCommandTopic;
+
+    /**
+     * Number of maintenance tasks run in parallel per instance.
+     */
+    @Positive
+    private int commandConsumerConcurrency = 1;
+
+    /**
+     * Number of task commands sent per batch. The dispatch progress is stored after each batch, a crash sends at most
+     * one batch twice.
+     */
+    @Positive
+    @Max(10_000)
+    private int dispatchBatchSize = 500;
+
+    /**
+     * While an instance sends the commands of a job, the other instances leave it alone for this long. Renewed after
+     * every batch.
+     */
+    private Duration dispatchLease = Duration.ofMinutes(2);
+
+    /**
+     * Attempts of a task that fails transiently (provider or OpenSearch unavailable), the first try included. After
+     * the last attempt the task fails.
+     */
+    @Positive
+    private int taskMaxAttempts = 6;
+
+    /**
+     * Delay before the first retry of a task; it doubles with every further attempt up to task-retry-max-backoff.
+     */
+    private Duration taskRetryInitialBackoff = Duration.ofMinutes(1);
+
+    private Duration taskRetryMaxBackoff = Duration.ofMinutes(30);
+
+    /**
+     * The commands of unfinished tasks are sent again if a fully dispatched job made no progress for this long, e.g.
+     * because a command was lost in a crash before its result was saved. This is not counted as an attempt.
+     */
+    private Duration taskRedispatchAfter = Duration.ofMinutes(30);
+
     @AssertTrue(message = "default-page-size must not exceed max-page-size")
     public boolean isDefaultPageSizeWithinMaxPageSize() {
         return defaultPageSize <= maxPageSize;
     }
 
-    @AssertTrue(message = "retention, housekeeping-interval and materialization-resume-after must be positive")
+    @AssertTrue(message = "retention, housekeeping-interval, materialization-resume-after, dispatch-lease, task-retry-initial-backoff, task-retry-max-backoff and task-redispatch-after must be positive")
     public boolean isDurationsPositive() {
-        return isPositive(retention) && isPositive(housekeepingInterval) && isPositive(materializationResumeAfter);
+        return isPositive(retention) && isPositive(housekeepingInterval) && isPositive(materializationResumeAfter)
+               && isPositive(dispatchLease) && isPositive(taskRetryInitialBackoff) && isPositive(taskRetryMaxBackoff)
+               && isPositive(taskRedispatchAfter);
+    }
+
+    @AssertTrue(message = "task-retry-initial-backoff must not exceed task-retry-max-backoff")
+    public boolean isRetryBackoffOrdered() {
+        return taskRetryInitialBackoff == null || taskRetryMaxBackoff == null || taskRetryInitialBackoff.compareTo(taskRetryMaxBackoff) <= 0;
     }
 
     private static boolean isPositive(Duration duration) {

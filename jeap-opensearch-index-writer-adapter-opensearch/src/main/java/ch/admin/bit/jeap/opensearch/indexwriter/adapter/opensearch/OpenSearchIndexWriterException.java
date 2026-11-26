@@ -34,6 +34,12 @@ public class OpenSearchIndexWriterException extends IndexWriterException {
                         .formatted(index, reason), false);
     }
 
+    public static OpenSearchIndexWriterException maintenanceIndexUpgradeFailed(String index, int fromVersion, int toVersion, int status, Object body) {
+        return new OpenSearchIndexWriterException(
+                "Maintenance index '%s' could not be upgraded from schema version %d to %d (HTTP %d: %s). Check that the service user may update the mapping of the index (see opensearch-permissions.md)"
+                        .formatted(index, fromVersion, toVersion, status, body), false);
+    }
+
     public static OpenSearchIndexWriterException maintenanceIndexCreationFailed(String index, int status, Object body) {
         return new OpenSearchIndexWriterException(
                 "Maintenance index '%s' could not be created (HTTP %d: %s). Check that the service user may create the index (see opensearch-permissions.md) and the 'jeap.opensearch.indexwriter.maintenance.index-settings' configuration"
