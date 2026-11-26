@@ -43,6 +43,7 @@ Apache License Version 2.0
  * ch.admin.bit.jeap:jeap-spring-boot-security-starter-test - [ch.admin.bit.jeap:jeap-spring-boot-security-starter-test](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-security-starter-test)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger - [ch.admin.bit.jeap:jeap-spring-boot-swagger](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger)
  * ch.admin.bit.jeap:jeap-spring-boot-swagger-starter - [ch.admin.bit.jeap:jeap-spring-boot-swagger-starter](https://github.com/jeap-admin-ch/jeap-spring-boot-starters/tree/main/jeap-spring-boot-swagger-starter)
+ * ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command - [ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command](https://github.com/jeap-admin-ch/jeap-message-type-registry/tree/main)
  * ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event - [ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-declaration-created-event](https://github.com/jeap-admin-ch/jeap-test-message-type-registry/tree/main)
  * ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-messaging-common - [ch.admin.bit.jeap.messaging.test.messagetype.jme:jme-messaging-common](https://github.com/jeap-admin-ch/jeap-test-message-type-registry/tree/main)
  * com.dynatrace.hash4j:hash4j - [com.dynatrace.hash4j:hash4j](https://github.com/dynatrace-oss/hash4j)
