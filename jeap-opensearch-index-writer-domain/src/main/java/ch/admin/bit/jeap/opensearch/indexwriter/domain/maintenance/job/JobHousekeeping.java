@@ -3,6 +3,7 @@ package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.ConditionalOnMaintenanceEnabled;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.JobDispatcher;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.TaskDispatchException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageUnavailableException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.Job;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.TaskCounts;
@@ -94,7 +95,8 @@ public class JobHousekeeping {
             for (Job job : jobs) {
                 try {
                     action.accept(job);
-                } catch (JobStorageUnavailableException e) {
+                } catch (JobStorageUnavailableException | TaskDispatchException e) {
+                    // The next jobs would fail the same way, waiting for each would delay the remaining steps
                     throw e;
                 } catch (RuntimeException e) {
                     log.warn("Job housekeeping failed for job {}, it is retried with the next run", job.jobId(), e);

@@ -63,7 +63,7 @@ class JobDispatcherTest {
 
     @Test
     void dispatch_leavesAJobAloneWhileAnotherInstanceHoldsItsLease() {
-        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(0, "other", NOW.plusSeconds(60), null));
+        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(0, "other", NOW.plusSeconds(60), null, 0, null));
 
         dispatcher.dispatch(job);
 
@@ -72,7 +72,7 @@ class JobDispatcherTest {
 
     @Test
     void dispatch_takesOverAnExpiredLeaseAtTheStoredCursor() {
-        Job job = materialized(InMemoryJobStorage.upsert("a", "b", "c"), new Dispatch(2, "crashed", NOW.minusSeconds(1), NOW.minusSeconds(200)));
+        Job job = materialized(InMemoryJobStorage.upsert("a", "b", "c"), new Dispatch(2, "crashed", NOW.minusSeconds(1), NOW.minusSeconds(200), 0, null));
 
         dispatcher.dispatch(job);
 
@@ -105,7 +105,7 @@ class JobDispatcherTest {
 
     @Test
     void dispatch_sendsDueRetriesAgainAndClearsTheirSchedule() {
-        Job job = materialized(InMemoryJobStorage.upsert("a", "b", "c"), new Dispatch(3, null, null, NOW.minusSeconds(10)));
+        Job job = materialized(InMemoryJobStorage.upsert("a", "b", "c"), new Dispatch(3, null, null, NOW.minusSeconds(10), 0, null));
         scheduleRetry(job, 0, NOW.minusSeconds(1));
         scheduleRetry(job, 1, NOW.plusSeconds(60));
 
@@ -118,7 +118,7 @@ class JobDispatcherTest {
 
     @Test
     void dispatch_doesNotInvalidateTheTaskVersionReadByTheRetryConsumer() {
-        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minusSeconds(10)));
+        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minusSeconds(10), 0, null));
         scheduleRetry(job, 0, NOW.minusSeconds(1));
         List<JobTask> readByConsumer = new ArrayList<>();
         JobDispatcher concurrentDispatcher = new JobDispatcher(properties, storage, storage,
@@ -137,7 +137,7 @@ class JobDispatcherTest {
 
     @Test
     void dispatch_recoversARetryWhoseScheduleWasClearedBeforePublicationFailed() {
-        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minusSeconds(10)));
+        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minusSeconds(10), 0, null));
         scheduleRetry(job, 0, NOW.minusSeconds(1));
         failAtBatch = 0;
 
@@ -158,7 +158,7 @@ class JobDispatcherTest {
     @Test
     void dispatch_sendsTheUnfinishedTasksOfAStalledJobAgain() {
         properties.setTaskRedispatchAfter(Duration.ofMinutes(30));
-        Job job = materialized(InMemoryJobStorage.upsert("a", "b", "c"), new Dispatch(3, null, null, NOW.minus(Duration.ofMinutes(31))));
+        Job job = materialized(InMemoryJobStorage.upsert("a", "b", "c"), new Dispatch(3, null, null, NOW.minus(Duration.ofMinutes(31)), 0, null));
         storage.storeTask(job, 1, TaskState.SUCCEEDED, NOW.minus(Duration.ofMinutes(40)));
         scheduleRetry(job, 2, NOW.plusSeconds(60));
 
@@ -170,14 +170,54 @@ class JobDispatcherTest {
 
     @Test
     void dispatch_doesNotSendAgainWhileAJobMakesProgress() {
-        Job recentlySent = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minus(Duration.ofMinutes(5))));
-        Job recentlyCompleted = materialized(InMemoryJobStorage.upsert("a", "b"), new Dispatch(2, null, null, NOW.minus(Duration.ofHours(2))));
+        Job recentlySent = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minus(Duration.ofMinutes(5)), 0, null));
+        Job recentlyCompleted = materialized(InMemoryJobStorage.upsert("a", "b"), new Dispatch(2, null, null, NOW.minus(Duration.ofHours(2)), 0, null));
         storage.storeTask(recentlyCompleted, 1, TaskState.SUCCEEDED, NOW.minus(Duration.ofMinutes(5)));
 
         dispatcher.dispatch(recentlySent);
         dispatcher.dispatch(recentlyCompleted);
 
         assertThat(sent).isEmpty();
+    }
+
+    @Test
+    void dispatch_countsTheRoundsOfSendingAStalledJobAgain() {
+        properties.setTaskRedispatchAfter(Duration.ofMinutes(30));
+        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minus(Duration.ofHours(1)), 1, null));
+
+        dispatcher.dispatch(job);
+
+        assertThat(sent).containsExactly(List.of("a"));
+        assertThat(stored(job).dispatch().redispatches()).isEqualTo(2);
+        assertThat(stored(job).dispatch().owner()).isNull();
+    }
+
+    @Test
+    void dispatch_reportsAJobAsStuckInsteadOfSendingItAgainAfterTheLastRound() {
+        properties.setTaskRedispatchAfter(Duration.ofMinutes(30));
+        properties.setTaskMaxRedispatches(3);
+        SimpleMeterRegistry meters = new SimpleMeterRegistry();
+        JobDispatcher capped = new JobDispatcher(properties, storage, storage, publisher,
+                new JobClock(Clock.fixed(NOW, ZoneOffset.UTC)), meters);
+        Job job = materialized(InMemoryJobStorage.upsert("a"), new Dispatch(1, null, null, NOW.minus(Duration.ofHours(1)), 3, null));
+
+        capped.dispatch(job);
+        capped.dispatch(stored(job));
+
+        assertThat(sent).isEmpty();
+        assertThat(stored(job).dispatch().stuckAt()).isEqualTo(NOW);
+        assertThat(meters.get("jeap.opensearch.indexwriter.maintenance.jobs.stuck").counter().count()).as("reported once").isEqualTo(1);
+        assertThat(storage.task(job, 0).state()).as("the task stays open and still finishes if its command arrives").isEqualTo(TaskState.OPEN);
+    }
+
+    @Test
+    void dispatch_stillSendsDueRetriesOfAStuckJob() {
+        Job job = materialized(InMemoryJobStorage.upsert("a", "b"), new Dispatch(2, null, null, NOW.minus(Duration.ofHours(3)), 3, NOW.minusSeconds(60)));
+        scheduleRetry(job, 1, NOW.minusSeconds(1));
+
+        dispatcher.dispatch(job);
+
+        assertThat(sent).containsExactly(List.of("b"));
     }
 
     private Job materialized(JobRequest request, Dispatch dispatch) {

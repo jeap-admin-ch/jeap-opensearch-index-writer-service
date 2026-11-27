@@ -22,8 +22,11 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 // The stored job and task are authoritative: a command only says which task to run, it never creates or changes a job.
 // Storage failures reading the job/task or saving the result require command redelivery.
@@ -34,6 +37,8 @@ import java.util.Optional;
 public class TaskCommandProcessor {
 
     private static final String TASK_METRICS_NAME = "jeap.opensearch.indexwriter.maintenance.task";
+    static final Duration JOB_CACHE_TTL = Duration.ofMinutes(1);
+    private static final int JOB_CACHE_MAX_ENTRIES = 1000;
 
     private final MaintenanceProperties properties;
     private final JobRepository jobRepository;
@@ -41,9 +46,13 @@ public class TaskCommandProcessor {
     private final UpsertTaskExecutor upsertExecutor;
     private final JobClock clock;
     private final MeterRegistry meterRegistry;
+    private final Map<UUID, CachedJob> jobCache = new ConcurrentHashMap<>();
+
+    private record CachedJob(Job job, Instant expiresAt) {
+    }
 
     public void process(TaskCommand command) {
-        Optional<Job> job = jobRepository.find(command.jobId(), false);
+        Optional<Job> job = findJob(command.jobId());
         if (job.isEmpty() || job.get().type() != command.type()) {
             log.warn("Ignoring {} command for task {}: job {} does not exist (it may have been deleted after its retention) or has another type",
                     Wire.of(command.type()), command.taskId(), command.jobId());
@@ -69,6 +78,25 @@ public class TaskCommandProcessor {
             return;
         }
         save(current, run(job.get(), current));
+    }
+
+    // The job fields used here (type, request without references, target) never change after acceptance. Caching them
+    // spares OpenSearch from loading the large job document, which holds all references, once per command. The task,
+    // read for every command, stays authoritative: the tasks of a job are deleted before the job itself.
+    private Optional<Job> findJob(UUID jobId) {
+        Instant now = clock.now();
+        CachedJob cached = jobCache.get(jobId);
+        if (cached != null && cached.expiresAt().isAfter(now)) {
+            return Optional.of(cached.job());
+        }
+        Optional<Job> job = jobRepository.find(jobId, false);
+        job.ifPresent(found -> {
+            if (jobCache.size() >= JOB_CACHE_MAX_ENTRIES) {
+                jobCache.values().removeIf(entry -> !entry.expiresAt().isAfter(now));
+            }
+            jobCache.put(jobId, new CachedJob(found, now.plus(JOB_CACHE_TTL)));
+        });
+        return job;
     }
 
     private static String mismatch(TaskCommand command, Job job, JobTask task) {
@@ -104,9 +132,8 @@ public class TaskCommandProcessor {
             log.error("Unexpected error while running task {} of job {}", task.taskId(), job.jobId(), e);
             result = TaskResult.failed(TaskErrorCode.UNEXPECTED_ERROR, e.toString(), null);
         }
-        if (result instanceof Retry retry && task.attempts() + 1 >= properties.getTaskMaxAttempts()) {
+        if (result instanceof Retry(TaskError error) && task.attempts() + 1 >= properties.getTaskMaxAttempts()) {
             int attempts = task.attempts() + 1;
-            TaskError error = retry.error();
             log.warn("Task {} of job {} failed after {} attempts: {}", task.taskId(), task.jobId(), attempts, error.message());
             TaskError finalError = new TaskError(error.code(), "Gave up after %d attempts: %s".formatted(attempts, error.message()),
                     error.targetIndex(), error.traceId());

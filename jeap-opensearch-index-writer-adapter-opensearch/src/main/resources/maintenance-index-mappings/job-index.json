@@ -33,7 +33,9 @@
       "dispatch_cursor": {"type": "integer"},
       "dispatch_owner": {"type": "keyword"},
       "dispatch_lease_until": {"type": "date"},
-      "dispatched_at": {"type": "date"}
+      "dispatched_at": {"type": "date"},
+      "dispatch_redispatches": {"type": "integer"},
+      "dispatch_stuck_at": {"type": "date"}
     }
   }
 }

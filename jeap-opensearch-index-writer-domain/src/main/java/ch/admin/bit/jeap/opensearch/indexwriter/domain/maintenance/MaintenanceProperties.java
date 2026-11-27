@@ -5,6 +5,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
@@ -132,9 +133,18 @@ public class MaintenanceProperties {
 
     /**
      * The commands of unfinished tasks are sent again if a fully dispatched job made no progress for this long, e.g.
-     * because a command was lost in a crash before its result was saved. This is not counted as an attempt.
+     * because a command was lost in a crash before its result was saved. This is not counted as an attempt. Must be
+     * longer than the time the command topic needs to drain the largest backlog, otherwise commands that are merely
+     * queued behind other jobs are sent again.
      */
-    private Duration taskRedispatchAfter = Duration.ofMinutes(30);
+    private Duration taskRedispatchAfter = Duration.ofHours(2);
+
+    /**
+     * Rounds of sending the unfinished tasks of a stalled job again. A job that stalls once more after the last round
+     * is reported as stuck: nothing is sent again, its open tasks still finish if their commands arrive.
+     */
+    @PositiveOrZero
+    private int taskMaxRedispatches = 3;
 
     @AssertTrue(message = "default-page-size must not exceed max-page-size")
     public boolean isDefaultPageSizeWithinMaxPageSize() {

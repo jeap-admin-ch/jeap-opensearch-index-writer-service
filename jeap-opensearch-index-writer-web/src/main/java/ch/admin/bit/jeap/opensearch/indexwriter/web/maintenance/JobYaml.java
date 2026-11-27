@@ -6,6 +6,7 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenancePr
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.InvalidJobException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.*;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobState;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobType;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.Wire;
 import ch.admin.bit.jeap.opensearch.indexwriter.web.maintenance.JobDtos.*;
@@ -120,8 +121,19 @@ class JobYaml {
                         report.summary().indexingDisabled()),
                 references, new ReportPage(report.limit(), references.size(), report.nextCursor()),
                 new ReportTarget(Wire.of(target.selection()), target.indexMajorVersion(), target.physicalIndex(), target.rolloverDetection()),
+                dispatch(job),
                 Wire.of(job.result()),
                 job.completedAt() == null ? null : job.completedAt().truncatedTo(ChronoUnit.SECONDS).toString());
+    }
+
+    private static ReportDispatch dispatch(Job job) {
+        Dispatch dispatch = job.dispatch();
+        if (dispatch.redispatches() == 0 && dispatch.stuckAt() == null) {
+            return null;
+        }
+        boolean stuck = dispatch.stuckAt() != null && job.state() == JobState.OPEN;
+        return new ReportDispatch(dispatch.redispatches(),
+                stuck ? dispatch.stuckAt().truncatedTo(ChronoUnit.SECONDS).toString() : null);
     }
 
     // Reads at most max-request-bytes + 1 bytes, so an oversized body is never buffered as a whole

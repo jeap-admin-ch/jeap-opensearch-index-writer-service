@@ -2,6 +2,7 @@ package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job;
 
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.JobDispatcher;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.TaskDispatchException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.Job;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +17,12 @@ import java.util.UUID;
 import static ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.InMemoryJobStorage.job;
 import static ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.InMemoryJobStorage.upsert;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 class JobHousekeepingTest {
 
@@ -25,9 +31,10 @@ class JobHousekeepingTest {
     private final InMemoryJobStorage storage = new InMemoryJobStorage();
     private final MaintenanceProperties properties = new MaintenanceProperties();
     private final JobClock clock = new JobClock(Clock.fixed(NOW, ZoneOffset.UTC));
+    private final JobDispatcher dispatcher = mock(JobDispatcher.class);
     private final JobSubmissionService submissionService =
             new JobSubmissionService(properties, null, null, null, null, storage, storage, clock, InMemoryJobStorage.RUN_DIRECTLY, new JobReferenceCache(), mock(JobDispatcher.class));
-    private final JobHousekeeping housekeeping = new JobHousekeeping(properties, submissionService, storage, storage, mock(JobDispatcher.class), clock);
+    private final JobHousekeeping housekeeping = new JobHousekeeping(properties, submissionService, storage, storage, dispatcher, clock);
 
     @Test
     void completeFinishedJobs_derivesResultFromTaskStates() {
@@ -163,6 +170,17 @@ class JobHousekeepingTest {
         assertCompleted(partially, JobResult.PARTIALLY_SUCCEEDED, NOW.minusSeconds(10));
         assertCompleted(allDisabled, JobResult.FAILED, NOW.minusSeconds(10));
         assertCompleted(failedAndDisabled, JobResult.FAILED, NOW.minusSeconds(10));
+    }
+
+    @Test
+    void dispatchCommands_stopsAtTheFirstKafkaFailureInsteadOfWaitingForEveryJob() {
+        materialized(upsert("a"));
+        materialized(upsert("b"));
+        doThrow(new TaskDispatchException("broker down", null)).when(dispatcher).dispatch(any());
+
+        assertThatThrownBy(housekeeping::dispatchCommands).isInstanceOf(TaskDispatchException.class);
+
+        verify(dispatcher, times(1)).dispatch(any());
     }
 
     private Job materialized(JobModel.JobRequest request) {

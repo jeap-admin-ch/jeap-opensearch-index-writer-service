@@ -32,12 +32,33 @@ public final class JobModel {
     }
 
     // cursor: tasks below this position have been dispatched; owner and leaseUntil: the instance currently dispatching;
-    // dispatchedAt: the last time commands were sent for the job
-    public record Dispatch(int cursor, String owner, Instant leaseUntil, Instant dispatchedAt) {
-        public static final Dispatch NONE = new Dispatch(0, null, null, null);
+    // dispatchedAt: the last time commands were sent for the job; redispatches: rounds of sending the unfinished tasks
+    // of a stalled job again; stuckAt: set once the job stalled again after the last allowed round, nothing is resent then
+    public record Dispatch(int cursor, String owner, Instant leaseUntil, Instant dispatchedAt, int redispatches, Instant stuckAt) {
+        public static final Dispatch NONE = new Dispatch(0, null, null, null, 0, null);
 
         public boolean isLeasedByOtherAt(String instance, Instant now) {
             return owner != null && !owner.equals(instance) && leaseUntil != null && leaseUntil.isAfter(now);
+        }
+
+        public Dispatch leased(String instance, Instant until) {
+            return new Dispatch(cursor, instance, until, dispatchedAt, redispatches, stuckAt);
+        }
+
+        public Dispatch released() {
+            return new Dispatch(cursor, null, null, dispatchedAt, redispatches, stuckAt);
+        }
+
+        public Dispatch sent(int newCursor, Instant until, Instant at) {
+            return new Dispatch(newCursor, owner, until, at, redispatches, stuckAt);
+        }
+
+        public Dispatch redispatched() {
+            return new Dispatch(cursor, owner, leaseUntil, dispatchedAt, redispatches + 1, stuckAt);
+        }
+
+        public Dispatch stuck(Instant at) {
+            return new Dispatch(cursor, owner, leaseUntil, dispatchedAt, redispatches, at);
         }
     }
 

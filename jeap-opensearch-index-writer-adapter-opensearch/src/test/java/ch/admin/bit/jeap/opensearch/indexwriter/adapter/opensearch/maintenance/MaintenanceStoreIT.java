@@ -416,13 +416,13 @@ class MaintenanceStoreIT {
         Job stored = repository.find(id, false).orElseThrow();
         assertThat(stored.dispatch()).isEqualTo(Dispatch.NONE);
         Instant lease = Instant.parse("2026-11-26T12:02:00Z");
-        Dispatch leased = new Dispatch(0, "instance-1", lease, null);
+        Dispatch leased = new Dispatch(0, "instance-1", lease, null, 0, null);
 
         Job updated = repository.updateDispatch(stored, leased).orElseThrow();
-        Job advanced = repository.updateDispatch(updated, new Dispatch(1, null, null, lease)).orElseThrow();
+        Job advanced = repository.updateDispatch(updated, new Dispatch(1, null, null, lease, 2, lease)).orElseThrow();
 
         assertThat(repository.updateDispatch(stored, leased)).as("stale version").isEmpty();
-        assertThat(repository.find(id, false).orElseThrow().dispatch()).isEqualTo(new Dispatch(1, null, null, lease));
+        assertThat(repository.find(id, false).orElseThrow().dispatch()).isEqualTo(new Dispatch(1, null, null, lease, 2, lease));
         assertThat(advanced.isFullyDispatched()).isTrue();
     }
 

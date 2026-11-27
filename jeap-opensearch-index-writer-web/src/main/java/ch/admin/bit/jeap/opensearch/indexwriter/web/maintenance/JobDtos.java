@@ -80,10 +80,20 @@ public final class JobDtos {
                                @JsonProperty("physical-index") String physicalIndex, String rollover) {
     }
 
+    // Only reported once the unfinished tasks of a stalled job were sent again
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ReportDispatch(
+            @Schema(description = "Rounds of sending the unfinished tasks again because the job made no progress")
+            int redispatches,
+            @JsonProperty("stuck-since")
+            @Schema(description = "Set while an open job stalled again after the last round; nothing more is sent, its open tasks still finish if their commands arrive")
+            String stuckSince) {
+    }
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"message", "operation", "indexType", "indexMajorVersion", "job-id", "job-type", "job-state",
             "started", "report-created", "started-by-name", "started-by-ext-id", "summary", "originReferences", "page",
-            "target", "job-result", "completed"})
+            "target", "dispatch", "job-result", "completed"})
     public record JobReport(Message message, ReportOperation operation, String indexType, Integer indexMajorVersion,
                             @JsonProperty("job-id") String jobId,
                             @JsonProperty("job-type") String jobType,
@@ -96,6 +106,7 @@ public final class JobDtos {
                             List<ReportReference> originReferences,
                             ReportPage page,
                             ReportTarget target,
+                            ReportDispatch dispatch,
                             @JsonProperty("job-result") String jobResult,
                             String completed) {
     }

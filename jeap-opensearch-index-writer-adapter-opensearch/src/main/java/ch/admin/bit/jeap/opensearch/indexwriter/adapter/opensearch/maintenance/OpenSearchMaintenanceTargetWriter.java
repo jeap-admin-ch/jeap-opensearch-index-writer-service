@@ -14,8 +14,10 @@ import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.transport.httpclient5.ResponseException;
 import org.springframework.stereotype.Component;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import tools.jackson.databind.JsonNode;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
 
@@ -78,8 +80,24 @@ class OpenSearchMaintenanceTargetWriter implements MaintenanceTargetWriter {
                 return failure(physicalIndex, documentId, r.status(), "", r.getMessage(), e);
             }
         }
-        // Connection problems of either transport (IOException, SdkClientException)
-        return TargetWriteException.unavailable("Writing document %s to %s failed: %s".formatted(documentId, physicalIndex, e), e);
+        if (isTransportFailure(e)) {
+            return TargetWriteException.unavailable("Writing document %s to %s failed: %s".formatted(documentId, physicalIndex, e), e);
+        }
+        // Anything else (e.g. the document cannot be serialised) is a defect: retrying cannot help and must not hide it
+        if (e instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        throw new IllegalStateException("Writing document %s to %s failed unexpectedly".formatted(documentId, physicalIndex), e);
+    }
+
+    // ApacheHttpClient5Transport reports connection problems as IOException, AwsSdk2Transport as SdkClientException
+    private static boolean isTransportFailure(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof IOException || t instanceof SdkClientException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static TargetWriteException failure(String physicalIndex, String documentId, int status, String type, String detail, Exception cause) {

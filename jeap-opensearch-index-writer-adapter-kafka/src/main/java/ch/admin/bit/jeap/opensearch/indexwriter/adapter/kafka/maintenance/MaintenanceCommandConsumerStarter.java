@@ -19,6 +19,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.backoff.ExponentialBackOff;
@@ -72,12 +73,14 @@ class MaintenanceCommandConsumerStarter {
     // and updates, require redelivery with back-off until the result can be saved. Anything else
     // (e.g. an unreadable command) is logged and skipped, the housekeeping sends the command of an unfinished task again.
     private static DefaultErrorHandler errorHandler() {
+        return errorHandler((consumerRecord, exception) -> log.error("Skipping maintenance command at offset {} of {}-{}",
+                consumerRecord.offset(), consumerRecord.topic(), consumerRecord.partition(), exception));
+    }
+
+    static DefaultErrorHandler errorHandler(ConsumerRecordRecoverer skipped) {
         ExponentialBackOff backOff = new ExponentialBackOff(1000, 2);
         backOff.setMaxInterval(60_000);
-        DefaultErrorHandler handler = new DefaultErrorHandler(
-                (consumerRecord, exception) -> log.error("Skipping maintenance command at offset {} of {}-{}",
-                        consumerRecord.offset(), consumerRecord.topic(), consumerRecord.partition(), exception),
-                backOff);
+        DefaultErrorHandler handler = new DefaultErrorHandler(skipped, backOff);
         handler.setClassifications(Map.of(JobStorageUnavailableException.class, true, JobStorageRejectedException.class, true), false);
         return handler;
     }

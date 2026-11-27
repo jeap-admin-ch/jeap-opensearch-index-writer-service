@@ -34,6 +34,7 @@ import java.util.function.UnaryOperator;
 public class JobDispatcher {
 
     private static final String COMMANDS_METRICS_NAME = "jeap.opensearch.indexwriter.maintenance.commands";
+    private static final String STUCK_METRICS_NAME = "jeap.opensearch.indexwriter.maintenance.jobs.stuck";
 
     private final MaintenanceProperties properties;
     private final JobRepository jobRepository;
@@ -62,31 +63,48 @@ public class JobDispatcher {
             return;
         }
         if (!job.isFullyDispatched()) {
-            withLease(job, this::sendRemaining);
+            withLease(job, UnaryOperator.identity(), this::sendRemaining);
         } else if (!taskRepository.findDueRetries(job.jobId(), now, -1, 1).isEmpty()) {
-            withLease(job, current -> resend(current, "retry", (after, limit) -> taskRepository.findDueRetries(current.jobId(), now, after, limit), true));
-        } else if (isStalled(job, now)) {
-            log.warn("Job {} made no progress for {}, the commands of its unfinished tasks are sent again", job.jobId(),
-                    properties.getTaskRedispatchAfter());
-            withLease(job, current -> resend(current, "redispatch", (after, limit) -> taskRepository.findOpenUnscheduled(current.jobId(), after, limit), false));
+            withLease(job, UnaryOperator.identity(),
+                    current -> resend(current, "retry", (after, limit) -> taskRepository.findDueRetries(current.jobId(), now, after, limit), true));
+        } else if (job.dispatch().stuckAt() == null && isStalled(job, now)) {
+            redispatchOrMarkStuck(job, now);
         }
     }
 
-    // Delete jobs are run from JEAP-7797 on
+    // A stall cannot tell lost commands from commands still queued behind other jobs, so the rounds are capped: a job
+    // that stalls again after the last round is only reported, its open tasks still finish if their commands arrive
+    private void redispatchOrMarkStuck(Job job, Instant now) {
+        int rounds = job.dispatch().redispatches();
+        if (rounds >= properties.getTaskMaxRedispatches()) {
+            if (jobRepository.updateDispatch(job, job.dispatch().stuck(now)).isPresent()) {
+                log.warn("Job {} made no progress for {} after {} rounds of sending its unfinished tasks again; nothing more is sent, the job is reported as stuck",
+                        job.jobId(), properties.getTaskRedispatchAfter(), rounds);
+                meterRegistry.counter(STUCK_METRICS_NAME, "job_type", Wire.of(job.type())).increment();
+            }
+            return;
+        }
+        log.warn("Job {} made no progress for {}, the commands of its unfinished tasks are sent again (round {} of {})", job.jobId(),
+                properties.getTaskRedispatchAfter(), rounds + 1, properties.getTaskMaxRedispatches());
+        withLease(job, Dispatch::redispatched,
+                current -> resend(current, "redispatch", (after, limit) -> taskRepository.findOpenUnscheduled(current.jobId(), after, limit), false));
+    }
+
+    // Only upsert jobs are run so far; delete jobs are stored and reported, but not executed yet
     private static boolean isExecutable(Job job) {
         return job.type() == JobType.UPSERT && job.state() == JobState.OPEN
                && job.materializationState() == MaterializationState.MATERIALIZED;
     }
 
-    private void withLease(Job job, UnaryOperator<Job> work) {
-        Dispatch dispatch = job.dispatch();
-        Optional<Job> leased = jobRepository.updateDispatch(job, new Dispatch(dispatch.cursor(), instance, leaseUntil(), dispatch.dispatchedAt()));
+    // change is stored together with the lease, so that it is recorded only if this instance gets to do the work
+    private void withLease(Job job, UnaryOperator<Dispatch> change, UnaryOperator<Job> work) {
+        Optional<Job> leased = jobRepository.updateDispatch(job, change.apply(job.dispatch()).leased(instance, leaseUntil()));
         if (leased.isEmpty()) {
             return;
         }
         Job done = work.apply(leased.get());
         if (done != null) {
-            jobRepository.updateDispatch(done, new Dispatch(done.dispatch().cursor(), null, null, done.dispatch().dispatchedAt()));
+            jobRepository.updateDispatch(done, done.dispatch().released());
         }
     }
 
@@ -101,7 +119,7 @@ public class JobDispatcher {
                     .filter(t -> t.state() == TaskState.OPEN && t.nextAttemptAt() == null)
                     .toList();
             send(current, open, "initial");
-            Optional<Job> advanced = jobRepository.updateDispatch(current, new Dispatch(to, instance, leaseUntil(), clock.now()));
+            Optional<Job> advanced = jobRepository.updateDispatch(current, current.dispatch().sent(to, leaseUntil(), clock.now()));
             if (advanced.isEmpty()) {
                 log.info("Lost the dispatch lease of job {} at position {}, another instance continues", current.jobId(), to);
                 return null;
@@ -129,7 +147,7 @@ public class JobDispatcher {
             send(current, tasks, kind);
             after = tasks.getLast().position();
             Optional<Job> renewed = jobRepository.updateDispatch(current,
-                    new Dispatch(current.dispatch().cursor(), instance, leaseUntil(), clock.now()));
+                    current.dispatch().sent(current.dispatch().cursor(), leaseUntil(), clock.now()));
             if (renewed.isEmpty()) {
                 return null;
             }

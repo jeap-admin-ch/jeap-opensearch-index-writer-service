@@ -32,6 +32,8 @@ class OpenSearchJobRepository implements JobRepository {
     private static final String DISPATCH_OWNER = "dispatch_owner";
     private static final String DISPATCH_LEASE_UNTIL = "dispatch_lease_until";
     private static final String DISPATCHED_AT = "dispatched_at";
+    private static final String DISPATCH_REDISPATCHES = "dispatch_redispatches";
+    private static final String DISPATCH_STUCK_AT = "dispatch_stuck_at";
 
     private static final String EXCLUDE_REFERENCES = "request.originReferences";
     private static final String VISIBLE = "wait_for";
@@ -155,6 +157,8 @@ class OpenSearchJobRepository implements JobRepository {
         doc.put(DISPATCH_OWNER, dispatch.owner());
         putInstant(doc, DISPATCH_LEASE_UNTIL, dispatch.leaseUntil());
         putInstant(doc, DISPATCHED_AT, dispatch.dispatchedAt());
+        doc.put(DISPATCH_REDISPATCHES, dispatch.redispatches());
+        putInstant(doc, DISPATCH_STUCK_AT, dispatch.stuckAt());
     }
 
     // Writes null explicitly, so that a partial update clears the field
@@ -244,7 +248,8 @@ class OpenSearchJobRepository implements JobRepository {
                 new SubmittedBy(text(submittedBy, "name"), text(submittedBy, "ext_id")), request, target,
                 // Jobs stored before schema version 2 have no dispatch fields: nothing was sent for them yet
                 new Dispatch(source.path(DISPATCH_CURSOR).asInt(0), text(source, DISPATCH_OWNER),
-                        instant(source, DISPATCH_LEASE_UNTIL), instant(source, DISPATCHED_AT)),
+                        instant(source, DISPATCH_LEASE_UNTIL), instant(source, DISPATCHED_AT),
+                        source.path(DISPATCH_REDISPATCHES).asInt(0), instant(source, DISPATCH_STUCK_AT)),
                 hit.path("_seq_no").asLong(), hit.path("_primary_term").asLong());
     }
 

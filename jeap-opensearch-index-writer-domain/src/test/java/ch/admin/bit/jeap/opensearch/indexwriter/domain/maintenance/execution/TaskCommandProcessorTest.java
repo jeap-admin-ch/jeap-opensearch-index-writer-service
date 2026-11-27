@@ -226,6 +226,24 @@ class TaskCommandProcessorTest {
     }
 
     @Test
+    void process_readsTheJobOncePerMinuteInsteadOfOncePerCommand() {
+        InMemoryJobStorage counting = spy(storage);
+        MutableClock clock = new MutableClock(NOW);
+        TaskCommandProcessor cachingProcessor = new TaskCommandProcessor(properties, counting, counting, executor,
+                new JobClock(clock), meterRegistry);
+        when(executor.execute(any(), any())).thenReturn(TaskResult.retry(TaskErrorCode.SOURCE_UNAVAILABLE, "HTTP 503", null));
+
+        cachingProcessor.process(command(task()));
+        clock.advance(Duration.ofSeconds(30));
+        cachingProcessor.process(command(task()));
+        verify(counting, times(1)).find(job.jobId(), false);
+
+        clock.advance(TaskCommandProcessor.JOB_CACHE_TTL);
+        cachingProcessor.process(command(task()));
+        verify(counting, times(2)).find(job.jobId(), false);
+    }
+
+    @Test
     void backoff_doublesUpToTheMaximum() {
         Duration initial = Duration.ofMinutes(1);
         Duration max = Duration.ofMinutes(30);
@@ -235,6 +253,33 @@ class TaskCommandProcessorTest {
         assertThat(TaskCommandProcessor.backoff(5, initial, max)).isEqualTo(Duration.ofMinutes(16));
         assertThat(TaskCommandProcessor.backoff(6, initial, max)).isEqualTo(Duration.ofMinutes(30));
         assertThat(TaskCommandProcessor.backoff(1000, initial, max)).isEqualTo(Duration.ofMinutes(30));
+    }
+
+    private static final class MutableClock extends java.time.Clock {
+        private Instant now;
+
+        private MutableClock(Instant now) {
+            this.now = now;
+        }
+
+        void advance(Duration duration) {
+            now = now.plus(duration);
+        }
+
+        @Override
+        public java.time.ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public java.time.Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
     }
 
     private JobTask task() {
