@@ -61,10 +61,11 @@ public final class JobStorage {
         Optional<JobTask> find(UUID taskId);
 
         // The update methods are conditional on the task version: false if the task changed in the meantime
+        // targetOutcomes is empty for upsert tasks; for delete tasks it replaces the stored outcomes as a whole
         boolean complete(JobTask task, TaskState state, Integer actualIndexMajorVersion, Integer actualIndexMinorVersion,
-                         TaskError error, Instant completedAt);
+                         List<TargetOutcome> targetOutcomes, TaskError error, Instant completedAt);
 
-        boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, TaskError lastError);
+        boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, List<TargetOutcome> targetOutcomes, TaskError lastError);
 
         // Clear before publishing so that dispatch cannot invalidate the task version read by the consumer
         void clearScheduledRetries(List<JobTask> tasks);

@@ -54,9 +54,11 @@ permissions on the configured `job-index` and `task-index` names (the `*` patter
 | `indices:data/write/delete/byquery`     | Delete the tasks of finished jobs after the retention period.        |
 | `indices:data/read/scroll*`             | Required by delete-by-query.                                         |
 
-Upsert jobs write to the physical index stored with the job (e.g. `jme_decree_document_v1-000001`), not through the write
-alias, and read its `index.uuid` setting before writing. The `*` pattern above covers this; a role restricted to alias names
-must also cover the physical index names with `indices:data/write/index` and `indices:monitor/settings/get`.
+Upsert and delete jobs write to the physical indices stored with the job (e.g. `jme_decree_document_v1-000001`), not through
+the write alias; upsert jobs also read the `index.uuid` setting before writing. The `*` pattern above covers this; a role
+restricted to alias names must also cover the physical index names with `indices:data/write/index` and
+`indices:monitor/settings/get` for upsert jobs and `indices:data/write/delete` for delete jobs. Without it, every target of a
+delete job fails with `INDEX_NOT_WRITABLE`.
 
 ## OpenSearch security role JSON
 

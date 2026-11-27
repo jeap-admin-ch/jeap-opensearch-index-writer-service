@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "maintenance_schema_version": 2
+      "maintenance_schema_version": 3
     },
     "properties": {
       "job_id": {"type": "keyword"},
@@ -16,6 +16,7 @@
       "actual_index_major_version": {"type": "integer"},
       "actual_index_minor_version": {"type": "integer"},
       "deletion_outcome": {"type": "keyword"},
+      "target_outcomes": {"type": "object", "enabled": false},
       "command_id": {"type": "keyword"},
       "dispatch_state": {"type": "keyword"},
       "task_state": {"type": "keyword"},

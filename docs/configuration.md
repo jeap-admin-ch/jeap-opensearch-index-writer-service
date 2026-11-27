@@ -107,7 +107,7 @@ configuration. A client ID referenced there must be registered under
 
 | Property                                                                                  | Default | Description                                                                                                                                      |
 |-------------------------------------------------------------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| `jeap.opensearch.indexwriter.maintenance.enabled` | `false` | Enables the maintenance job API, job/task index initialisation, housekeeping and the execution of upsert jobs. Requires `jeap.opensearch.indexwriter.maintenance.upsert-command-topic` and the command contracts. See [Maintenance jobs](maintenance-jobs.md) for all `maintenance.*` job settings. |
+| `jeap.opensearch.indexwriter.maintenance.enabled` | `false` | Enables the maintenance job API, job/task index initialisation, housekeeping and the execution of upsert and delete jobs. Requires `jeap.opensearch.indexwriter.maintenance.upsert-command-topic`, `jeap.opensearch.indexwriter.maintenance.delete-command-topic` and the command contracts. See [Maintenance jobs](maintenance-jobs.md) for all `maintenance.*` job settings. |
 | `jeap.opensearch.indexwriter.maintenance.policy-check.verify-permission-on-startup`       | `false` | Probe ISM Explain once at startup and log an `ERROR` if it is denied. Enable it in services that use the [policy check](maintenance-target-policy-check.md). |
 
 ## Index lifecycle

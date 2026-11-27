@@ -5,7 +5,7 @@
   "mappings": {
     "dynamic": "strict",
     "_meta": {
-      "maintenance_schema_version": 2
+      "maintenance_schema_version": 3
     },
     "properties": {
       "job_id": {"type": "keyword"},
@@ -30,6 +30,7 @@
       "target_index": {"type": "keyword"},
       "target_index_uuid": {"type": "keyword"},
       "rollover_detection": {"type": "keyword"},
+      "targets": {"type": "object", "enabled": false},
       "dispatch_cursor": {"type": "integer"},
       "dispatch_owner": {"type": "keyword"},
       "dispatch_lease_until": {"type": "date"},

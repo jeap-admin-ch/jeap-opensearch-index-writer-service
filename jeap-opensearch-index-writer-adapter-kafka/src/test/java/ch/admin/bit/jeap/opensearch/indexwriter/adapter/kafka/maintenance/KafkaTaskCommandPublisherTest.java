@@ -3,6 +3,7 @@ package ch.admin.bit.jeap.opensearch.indexwriter.adapter.kafka.maintenance;
 import ch.admin.bit.jeap.messaging.avro.AvroMessage;
 import ch.admin.bit.jeap.messaging.avro.AvroMessageKey;
 import ch.admin.bit.jeap.messaging.kafka.properties.KafkaProperties;
+import ch.admin.bit.jeap.opensearch.command.delete.DeleteSearchItemCommand;
 import ch.admin.bit.jeap.opensearch.command.upsert.UpsertSearchItemCommand;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.TaskDispatchException;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.*;
 class KafkaTaskCommandPublisherTest {
 
     private static final String TOPIC = "my-upsert-command";
+    private static final String DELETE_TOPIC = "my-delete-command";
 
     @SuppressWarnings("unchecked")
     private final KafkaTemplate<AvroMessageKey, AvroMessage> kafkaTemplate = mock(KafkaTemplate.class);
@@ -44,6 +46,7 @@ class KafkaTaskCommandPublisherTest {
         when(kafkaProperties.getServiceName()).thenReturn("my-index-writer");
         MaintenanceProperties properties = new MaintenanceProperties();
         properties.setUpsertCommandTopic(TOPIC);
+        properties.setDeleteCommandTopic(DELETE_TOPIC);
         publisher = new KafkaTaskCommandPublisher(beanFactory, properties, kafkaProperties);
     }
 
@@ -64,21 +67,25 @@ class KafkaTaskCommandPublisherTest {
     @Test
     void publish_reportsAFailedSendAsDispatchFailure() {
         Job job = MaintenanceTestJobs.job(JobType.UPSERT);
+        List<JobTask> tasks = List.of(MaintenanceTestJobs.task(job, 0, "a", null));
         when(kafkaTemplate.send(eq(TOPIC), any(AvroMessage.class))).thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker down")));
 
-        assertThatThrownBy(() -> publisher.publish(job, List.of(MaintenanceTestJobs.task(job, 0, "a", null))))
+        assertThatThrownBy(() -> publisher.publish(job, tasks))
                 .isInstanceOf(TaskDispatchException.class)
                 .hasRootCauseMessage("broker down");
     }
 
     @Test
-    void publish_refusesDeleteJobs() {
+    void publish_sendsTheCommandsOfDeleteJobsToTheDeleteTopic() {
         Job job = MaintenanceTestJobs.job(JobType.DELETE);
+        when(kafkaTemplate.send(eq(DELETE_TOPIC), any(AvroMessage.class))).thenReturn(CompletableFuture.completedFuture(sendResult()));
 
-        assertThatThrownBy(() -> publisher.publish(job, List.of(MaintenanceTestJobs.task(job, 0, "a", null))))
-                .isInstanceOf(IllegalArgumentException.class);
+        publisher.publish(job, List.of(MaintenanceTestJobs.task(job, 0, "a", null)));
 
-        verifyNoInteractions(kafkaTemplate);
+        ArgumentCaptor<AvroMessage> sent = ArgumentCaptor.forClass(AvroMessage.class);
+        verify(kafkaTemplate).send(eq(DELETE_TOPIC), sent.capture());
+        assertThat(sent.getValue()).isInstanceOf(DeleteSearchItemCommand.class);
+        verify(kafkaTemplate, never()).send(eq(TOPIC), any(AvroMessage.class));
     }
 
     @SuppressWarnings("unchecked")

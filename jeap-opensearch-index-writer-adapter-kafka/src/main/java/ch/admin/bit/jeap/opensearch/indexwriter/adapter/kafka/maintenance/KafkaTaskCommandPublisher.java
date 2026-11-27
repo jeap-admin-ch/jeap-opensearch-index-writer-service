@@ -41,18 +41,21 @@ class KafkaTaskCommandPublisher implements TaskCommandPublisher {
         this.kafkaProperties = kafkaProperties;
     }
 
+    private AvroMessage command(Job job, JobTask task) {
+        String system = kafkaProperties.getSystemName();
+        String service = kafkaProperties.getServiceName();
+        return switch (job.type()) {
+            case UPSERT -> UpsertSearchItemCommandBuilder.builder(system, service).task(job, task).build();
+            case DELETE -> DeleteSearchItemCommandBuilder.builder(system, service).task(job, task).build();
+        };
+    }
+
     // No key: the commands spread over all partitions, their order does not matter
     @Override
     public void publish(Job job, List<JobTask> tasks) {
-        if (job.type() != JobType.UPSERT) {
-            throw new IllegalArgumentException("Commands of %s jobs are not supported by this version".formatted(job.type()));
-        }
-        String topic = properties.getUpsertCommandTopic();
+        String topic = job.type() == JobType.UPSERT ? properties.getUpsertCommandTopic() : properties.getDeleteCommandTopic();
         CompletableFuture<?>[] sends = tasks.stream()
-                .map(task -> kafkaTemplate.send(topic, UpsertSearchItemCommandBuilder
-                        .builder(kafkaProperties.getSystemName(), kafkaProperties.getServiceName())
-                        .task(job, task)
-                        .build()))
+                .map(task -> kafkaTemplate.send(topic, command(job, task)))
                 .toArray(CompletableFuture[]::new);
         try {
             CompletableFuture.allOf(sends).get(SEND_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);

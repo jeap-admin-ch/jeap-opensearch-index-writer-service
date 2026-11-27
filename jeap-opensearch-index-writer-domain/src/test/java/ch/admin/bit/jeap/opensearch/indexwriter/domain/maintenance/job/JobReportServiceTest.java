@@ -14,11 +14,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.InMemoryJobStorage.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 class JobReportServiceTest {
 
@@ -36,9 +38,9 @@ class JobReportServiceTest {
         JobReport report = service.report(job.jobId(), JobType.UPSERT, null, null);
 
         assertThat(report.entries()).extracting(ReportEntry::originId, ReportEntry::state, ReportEntry::version)
-                .containsExactly(org.assertj.core.groups.Tuple.tuple("a", TaskState.SUCCEEDED, "v-a"),
-                        org.assertj.core.groups.Tuple.tuple("b", TaskState.OPEN, "v-b"),
-                        org.assertj.core.groups.Tuple.tuple("c", TaskState.OPEN, "v-c"));
+                .containsExactly(tuple("a", TaskState.SUCCEEDED, "v-a"),
+                        tuple("b", TaskState.OPEN, "v-b"),
+                        tuple("c", TaskState.OPEN, "v-c"));
         assertThat(report.entries().get(1).taskId()).isEqualTo(JobModel.taskId(job.jobId(), "b"));
         assertThat(report.summary()).isEqualTo(new ReportSummary(3, 1, 2, 1, 0, 0));
         assertThat(report.nextCursor()).isNull();
@@ -153,6 +155,25 @@ class JobReportServiceTest {
         assertThat(report.entries().get(0).attempts()).isNull();
         assertThat(report.entries().get(2).attempts()).isEqualTo(2);
         assertThat(report.entries().get(2).error()).isEqualTo(lastError);
+    }
+
+    @Test
+    void report_listsEveryTargetOfADeleteEntryWithItsOutcomeOnceProcessed() {
+        Job job = InMemoryJobStorage.withTargets(store(delete("a", "b"), MaterializationState.MATERIALIZED), List.of(
+                new JobModel.JobTarget(MajorSelection.ALL, 1, "idx_v1-000001", "u1", JobModel.JobTarget.ROLLOVER_NOT_DETECTED),
+                new JobModel.JobTarget(MajorSelection.ALL, 2, "idx_v2-000001", "u2", JobModel.JobTarget.ROLLOVER_NOT_DETECTED)));
+        storage.store(job);
+        JobModel.JobTask open = JobModel.JobTask.open(job.jobId(), 0, "a", null, NOW);
+        storage.storeTask(new JobModel.JobTask(open.jobId(), open.taskId(), 0, "a", null, TaskState.OPEN, null, null,
+                List.of(new JobModel.TargetOutcome(1, "idx_v1-000001", DeletionOutcome.DELETED, null)), null, NOW, null,
+                1, NOW.plusSeconds(60), 0, 1));
+
+        JobReport report = service.report(job.jobId(), JobType.DELETE, null, null);
+
+        assertThat(report.entries().get(0).targets()).extracting(JobModel.TargetOutcome::indexMajorVersion, JobModel.TargetOutcome::outcome)
+                .containsExactly(tuple(1, DeletionOutcome.DELETED), tuple(2, null));
+        assertThat(report.entries().get(1).targets()).as("a task not created yet lists the targets without outcome")
+                .extracting(JobModel.TargetOutcome::targetIndex).containsExactly("idx_v1-000001", "idx_v2-000001");
     }
 
     private Job store(JobModel.JobRequest request, MaterializationState materialization) {

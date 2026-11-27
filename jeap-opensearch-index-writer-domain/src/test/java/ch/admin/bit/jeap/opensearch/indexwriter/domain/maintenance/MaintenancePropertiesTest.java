@@ -28,6 +28,22 @@ class MaintenancePropertiesTest {
     }
 
     @Test
+    void deleteCommandTopicIsRequired() {
+        MaintenanceProperties properties = valid();
+        properties.setDeleteCommandTopic(" ");
+
+        assertThat(paths(VALIDATOR.validate(properties))).containsExactly("deleteCommandTopic");
+    }
+
+    @Test
+    void commandTopicsMustDiffer() {
+        MaintenanceProperties properties = valid();
+        properties.setDeleteCommandTopic(properties.getUpsertCommandTopic());
+
+        assertThat(paths(VALIDATOR.validate(properties))).containsExactly("commandTopicsDistinct");
+    }
+
+    @Test
     void retryBackoffMustBeOrdered() {
         MaintenanceProperties properties = valid();
         properties.setTaskRetryInitialBackoff(Duration.ofHours(1));
@@ -70,10 +86,11 @@ class MaintenancePropertiesTest {
         assertThat(paths(VALIDATOR.validate(properties))).containsExactly("durationsPositive");
     }
 
-    // Everything has a default except the topic, which is specific to each service instance
+    // Everything has a default except the topics, which are specific to each service instance
     private static MaintenanceProperties valid() {
         MaintenanceProperties properties = new MaintenanceProperties();
         properties.setUpsertCommandTopic("my-upsert-search-item-command");
+        properties.setDeleteCommandTopic("my-delete-search-item-command");
         return properties;
     }
 

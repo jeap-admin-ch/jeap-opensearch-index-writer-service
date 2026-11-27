@@ -38,44 +38,65 @@ class DeleteJobController {
 
     private static final String DELETE_EXAMPLE = """
             indexType: DecreeDocument
-            indexMajorVersion: 1
             originReferences:
             - id: '12345'
             - id: '67890'
             """;
     private static final String REPORT_EXAMPLE = """
             indexType: DecreeDocument
-            indexMajorVersion: 1
             job-id: 970774be-7980-4748-a79c-d477a75f9270
             job-type: delete
-            job-state: open
+            job-state: completed
             started: '2026-10-23T11:00:00Z'
-            report-created: '2026-10-23T11:00:05Z'
+            report-created: '2026-10-23T11:00:20Z'
             started-by-name: Example Operator
             started-by-ext-id: '123456'
             summary:
               total-references: 2
               materialized-tasks: 2
-              open: 2
-              succeeded: 0
-              failed: 0
+              open: 0
+              succeeded: 1
+              failed: 1
               indexing-disabled: 0
             originReferences:
             - task-id: c19c04b7-cb22-4323-ad5d-fab96f6bfec8
               id: '12345'
-              state: open
+              state: succeeded
+              targets:
+              - index-major-version: 1
+                physical-index: jme_decree_document_v1-000001
+                deletion-outcome: deleted
+              - index-major-version: 2
+                physical-index: jme_decree_document_v2-000001
+                deletion-outcome: already-absent
             - task-id: baecb7d7-5ef4-4b10-bf7f-8a5ca5147c2c
               id: '67890'
-              state: open
+              state: failed
+              targets:
+              - index-major-version: 1
+                physical-index: jme_decree_document_v1-000001
+                deletion-outcome: deleted
+              - index-major-version: 2
+                physical-index: jme_decree_document_v2-000001
+                deletion-outcome: failed
+                error:
+                  code: INDEX_NOT_WRITABLE
+                  message: 'OpenSearch answered HTTP 403 for document 67890 in jme_decree_document_v2-000001: cluster_block_exception'
+                  target-index: jme_decree_document_v2-000001
             page:
               limit: 100
               returned: 2
               next-cursor: null
-            target:
-              selection: explicit
-              index-major-version: 1
+            target-selection: all
+            targets:
+            - index-major-version: 1
               physical-index: jme_decree_document_v1-000001
               rollover: not-detected
+            - index-major-version: 2
+              physical-index: jme_decree_document_v2-000001
+              rollover: not-detected
+            job-result: partially-succeeded
+            completed: '2026-10-23T11:00:15Z'
             """;
 
     private final JobSubmissionService submissionService;
@@ -86,8 +107,9 @@ class DeleteJobController {
     @PreAuthorize("hasRole('deletejob','create')")
     @Operation(summary = "Submit a delete job", description = """
             Stores the job and answers right away; one task per origin reference is created in the background
-            (materialized-tasks in the report). The job selects exactly one schema major with
-            indexMajorVersion, the highest configured major if omitted. Delete references have ids only.
+            (materialized-tasks in the report) and then run asynchronously: each id is deleted from every target of
+            the job. indexMajorVersion selects one schema major; if omitted, every major configured for the index
+            type when the job is accepted. Already absent documents count as success (already-absent). Delete references have ids only.
             Submitting the same job id with equivalent content returns the stored job.
             Required role: deletejob#create""",
             requestBody = @RequestBody(required = true, content = {
@@ -116,8 +138,9 @@ class DeleteJobController {
     @GetMapping(value = "/{jobId}", produces = "application/yaml")
     @PreAuthorize("hasRole('jobreport','read')")
     @Operation(summary = "Get a delete job report", description = """
-            Reports the submitted input, the resolved schema major and target, summary counts and one page of
-            references covering every id, including ids whose task is not yet created. Required role: jobreport#read""",
+            Reports the submitted input, the selected schema majors and targets, summary counts and one page of
+            references covering every id, including ids whose task is not yet created, with the outcome per target.
+            Required role: jobreport#read""",
             responses = {
                     @ApiResponse(responseCode = "200", description = "The job report", content = @Content(mediaType = "application/yaml",
                             schema = @Schema(implementation = JobDtos.JobReport.class), examples = @ExampleObject(value = REPORT_EXAMPLE))),

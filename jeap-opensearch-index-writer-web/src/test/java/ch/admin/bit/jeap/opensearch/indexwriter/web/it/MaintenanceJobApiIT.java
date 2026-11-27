@@ -260,7 +260,8 @@ class MaintenanceJobApiIT extends KafkaIntegrationTestBase {
         String retrieved = perform(get("/api/delete-jobs/" + id)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(report).contains("job-type: delete").contains("selection: explicit")
+        assertThat(report).contains("job-type: delete").contains("target-selection: explicit")
+                .contains("targets:").contains("index-major-version: 1").doesNotContain("\ntarget:")
                 .doesNotContain("version: '").doesNotContain("actual-index");
         assertThat(retrieved).contains("job-id: " + id);
     }

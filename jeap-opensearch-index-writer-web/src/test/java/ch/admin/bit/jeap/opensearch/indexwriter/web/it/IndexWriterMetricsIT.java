@@ -14,8 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
-import org.springframework.boot.resttestclient.TestRestTemplate;
-import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -24,6 +23,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.client.RestTestClient;
 import org.togglz.core.manager.FeatureManager;
 
 import java.time.Duration;
@@ -35,10 +35,9 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @AutoConfigureMetrics
-@AutoConfigureTestRestTemplate
+@AutoConfigureRestTestClient
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "management.endpoint.prometheus.enabled=true",
         "management.endpoints.web.exposure.include=*",
@@ -64,7 +63,7 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
     private int localServerPort;
 
     @Autowired
-    private TestRestTemplate restTemplate;
+    private RestTestClient restTestClient;
 
     @MockitoBean
     @SuppressWarnings("unused")
@@ -113,9 +112,7 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
         sendSync(TEST_TOPIC, declarationEvent("metrics-1"));
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            var response = restTemplate.getForEntity("/actuator/prometheus", String.class);
-            assertEquals(200, response.getStatusCode().value());
-            assertThat(response.getBody())
+            assertThat(prometheusMetrics())
                     .contains(
                             "jeap_opensearch_indexwriter_indexing_seconds_sum{message_type=\"JmeDeclarationCreatedEvent\"",
                             "jeap_opensearch_indexwriter_indexing_seconds_count{message_type=\"JmeDeclarationCreatedEvent\""
@@ -128,9 +125,7 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
         sendSync(TEST_TOPIC, declarationEvent("metrics-2"));
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            var response = restTemplate.getForEntity("/actuator/prometheus", String.class);
-            assertEquals(200, response.getStatusCode().value());
-            assertThat(response.getBody())
+            assertThat(prometheusMetrics())
                     .contains(
                             "jeap_opensearch_indexwriter_kafka_lag_seconds_sum{message_type=\"JmeDeclarationCreatedEvent\"",
                             "jeap_opensearch_indexwriter_kafka_lag_seconds_count{message_type=\"JmeDeclarationCreatedEvent\"",
@@ -140,6 +135,12 @@ class IndexWriterMetricsIT extends KafkaIntegrationTestBase {
                             "jeap_opensearch_indexwriter_opensearch_write_seconds_count{index_type=\"TestDocument\",operation=\"upsert\""
                     );
         });
+    }
+
+    private String prometheusMetrics() {
+        return restTestClient.get().uri("/actuator/prometheus").exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class).returnResult().getResponseBody();
     }
 
     private static JmeDeclarationCreatedEvent declarationEvent(String idempotenceId) {

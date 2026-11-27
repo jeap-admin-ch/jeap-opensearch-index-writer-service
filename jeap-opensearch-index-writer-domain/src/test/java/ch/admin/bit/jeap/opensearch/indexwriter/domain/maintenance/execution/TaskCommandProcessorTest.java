@@ -1,7 +1,9 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution;
 
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.DeletionOutcome;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.InMemoryJobStorage;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobClock;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageUnavailableException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.Job;
@@ -35,8 +37,9 @@ class TaskCommandProcessorTest {
     private final InMemoryJobStorage storage = new InMemoryJobStorage();
     private final MaintenanceProperties properties = new MaintenanceProperties();
     private final UpsertTaskExecutor executor = mock(UpsertTaskExecutor.class);
+    private final DeleteTaskExecutor deleteExecutor = mock(DeleteTaskExecutor.class);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-    private final TaskCommandProcessor processor = new TaskCommandProcessor(properties, storage, storage, executor,
+    private final TaskCommandProcessor processor = new TaskCommandProcessor(properties, storage, storage, executor, deleteExecutor,
             new JobClock(Clock.fixed(NOW, ZoneOffset.UTC)), meterRegistry);
     private Job job;
 
@@ -146,7 +149,7 @@ class TaskCommandProcessorTest {
 
     @Test
     void process_redeliversWhenConcurrentDispatchClearsTheRetryWithoutSavingAnOutcome() {
-        storage.scheduleRetry(task(), 1, NOW.minusSeconds(1),
+        storage.scheduleRetry(task(), 1, NOW.minusSeconds(1), List.of(),
                 TaskResult.retry(TaskErrorCode.SOURCE_UNAVAILABLE, "HTTP 503", null).error());
         when(executor.execute(any(), any())).thenAnswer(_ -> {
             storage.clearScheduledRetries(List.of(task()));
@@ -168,7 +171,7 @@ class TaskCommandProcessorTest {
     @Test
     void process_keepsTheOutcomeSavedByAConcurrentConsumer() {
         when(executor.execute(any(), any())).thenAnswer(_ -> {
-            storage.complete(task(), TaskState.SUCCEEDED, 1, 2, null, NOW);
+            storage.complete(task(), TaskState.SUCCEEDED, 1, 2, List.of(), null, NOW);
             return TaskResult.failed(TaskErrorCode.SOURCE_NOT_FOUND, "HTTP 404", null);
         });
 
@@ -182,7 +185,7 @@ class TaskCommandProcessorTest {
     @Test
     void process_keepsTheRetryScheduledByAConcurrentConsumer() {
         when(executor.execute(any(), any())).thenAnswer(_ -> {
-            storage.scheduleRetry(task(), 1, NOW.plusSeconds(60),
+            storage.scheduleRetry(task(), 1, NOW.plusSeconds(60), List.of(),
                     TaskResult.retry(TaskErrorCode.SOURCE_UNAVAILABLE, "HTTP 503", null).error());
             return TaskResult.succeeded(1, 0);
         });
@@ -220,8 +223,9 @@ class TaskCommandProcessorTest {
     @Test
     void process_unavailableTaskStorageIsLeftToTheConsumerForRedelivery() {
         when(executor.execute(any(), any())).thenThrow(new JobStorageUnavailableException("down", null));
+        TaskCommand command = command(task());
 
-        assertThatThrownBy(() -> processor.process(command(task()))).isInstanceOf(JobStorageUnavailableException.class);
+        assertThatThrownBy(() -> processor.process(command)).isInstanceOf(JobStorageUnavailableException.class);
         assertThat(task().state()).isEqualTo(TaskState.OPEN);
     }
 
@@ -229,7 +233,7 @@ class TaskCommandProcessorTest {
     void process_readsTheJobOncePerMinuteInsteadOfOncePerCommand() {
         InMemoryJobStorage counting = spy(storage);
         MutableClock clock = new MutableClock(NOW);
-        TaskCommandProcessor cachingProcessor = new TaskCommandProcessor(properties, counting, counting, executor,
+        TaskCommandProcessor cachingProcessor = new TaskCommandProcessor(properties, counting, counting, executor, deleteExecutor,
                 new JobClock(clock), meterRegistry);
         when(executor.execute(any(), any())).thenReturn(TaskResult.retry(TaskErrorCode.SOURCE_UNAVAILABLE, "HTTP 503", null));
 
@@ -241,6 +245,23 @@ class TaskCommandProcessorTest {
         clock.advance(TaskCommandProcessor.JOB_CACHE_TTL);
         cachingProcessor.process(command(task()));
         verify(counting, times(2)).find(job.jobId(), false);
+    }
+
+    @Test
+    void process_runsDeleteTasksAndStoresTheirOutcomePerTarget() {
+        Job delete = InMemoryJobStorage.job(UUID.randomUUID(), InMemoryJobStorage.delete("d"), JobState.OPEN,
+                MaterializationState.MATERIALIZED, NOW.minusSeconds(60), null);
+        storage.store(delete);
+        storage.storeTask(delete, 0, TaskState.OPEN, null);
+        JobTask deleteTask = storage.task(delete, 0);
+        List<JobModel.TargetOutcome> outcomes = List.of(new JobModel.TargetOutcome(1, "index_v1-000001", DeletionOutcome.ALREADY_ABSENT, null));
+        when(deleteExecutor.execute(any(), any())).thenReturn(TaskResult.deleted(outcomes));
+
+        processor.process(new TaskCommand(JobType.DELETE, delete.jobId(), deleteTask.taskId(), "d", null, null, null));
+
+        assertThat(storage.task(delete, 0).state()).isEqualTo(TaskState.SUCCEEDED);
+        assertThat(storage.task(delete, 0).targetOutcomes()).isEqualTo(outcomes);
+        verifyNoInteractions(executor);
     }
 
     @Test

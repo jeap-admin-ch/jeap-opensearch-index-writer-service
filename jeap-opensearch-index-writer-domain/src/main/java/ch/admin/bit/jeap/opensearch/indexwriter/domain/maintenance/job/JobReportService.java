@@ -48,7 +48,7 @@ public class JobReportService {
         boolean creationFailed = job.materializationState() == MaterializationState.FAILED;
         for (int position = from; position < to; position++) {
             JobTask task = tasksByPosition.get(position);
-            ReportEntry entry = task != null ? entry(task, job.type()) : unmaterializedEntry(jobId, references.get(position), job.type());
+            ReportEntry entry = task != null ? entry(task, job) : unmaterializedEntry(job, references.get(position));
             entries.add(creationFailed && entry.state() == TaskState.OPEN ? asCreationFailed(entry) : entry);
         }
 
@@ -89,21 +89,33 @@ public class JobReportService {
         throw new InvalidJobException("Invalid cursor '%s'".formatted(cursor));
     }
 
-    private static ReportEntry entry(JobTask task, JobType type) {
-        boolean upsert = type == JobType.UPSERT;
+    private static ReportEntry entry(JobTask task, Job job) {
+        boolean upsert = job.type() == JobType.UPSERT;
         return new ReportEntry(task.taskId(), task.originId(), upsert ? task.referenceVersion() : null, task.state(),
                 upsert ? task.actualIndexMajorVersion() : null, upsert ? task.actualIndexMinorVersion() : null,
-                upsert ? null : task.deletionOutcome(), task.error(),
+                upsert ? null : targets(job, task.targetOutcomes()), task.error(),
                 task.state() == TaskState.OPEN && task.attempts() > 0 ? task.attempts() : null);
+    }
+
+    // Every target of the job, with its outcome once processed; a delete job stored before outcomes per target existed
+    // simply has none yet
+    private static List<TargetOutcome> targets(Job job, List<TargetOutcome> recorded) {
+        Map<Integer, TargetOutcome> byMajor = new HashMap<>();
+        recorded.forEach(o -> byMajor.put(o.indexMajorVersion(), o));
+        return job.targets().stream()
+                .map(t -> byMajor.getOrDefault(t.indexMajorVersion(), new TargetOutcome(t.indexMajorVersion(), t.physicalIndex(), null, null)))
+                .toList();
     }
 
     private static ReportEntry asCreationFailed(ReportEntry entry) {
         return new ReportEntry(entry.taskId(), entry.originId(), entry.version(), TaskState.FAILED,
-                entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.deletionOutcome(), CREATION_REJECTED, null);
+                entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.targets(), CREATION_REJECTED, null);
     }
 
-    private static ReportEntry unmaterializedEntry(UUID jobId, JobReference reference, JobType type) {
-        return new ReportEntry(JobModel.taskId(jobId, reference.id()), reference.id(),
-                type == JobType.UPSERT ? reference.version() : null, TaskState.OPEN, null, null, null, null, null);
+    private static ReportEntry unmaterializedEntry(Job job, JobReference reference) {
+        boolean upsert = job.type() == JobType.UPSERT;
+        return new ReportEntry(JobModel.taskId(job.jobId(), reference.id()), reference.id(),
+                upsert ? reference.version() : null, TaskState.OPEN, null, null,
+                upsert ? null : targets(job, List.of()), null, null);
     }
 }

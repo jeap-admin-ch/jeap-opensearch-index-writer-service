@@ -31,7 +31,12 @@ public class InMemoryJobStorage implements JobRepository, TaskRepository {
                    Instant startedAt, Instant completedAt) {
         JobTarget target = new JobTarget(MajorSelection.EXPLICIT, 1, "index_v1-000001", "uuid", JobTarget.ROLLOVER_NOT_DETECTED);
         return new Job(jobId, JobSubmissionService.requestHash(request), state, null, request.references().size(), materialization,
-                startedAt, completedAt, new SubmittedBy("tester", null), request, target, Dispatch.NONE, 0, 1);
+                startedAt, completedAt, new SubmittedBy("tester", null), request, List.of(target), Dispatch.NONE, 0, 1);
+    }
+
+    public static Job withTargets(Job job, List<JobTarget> targets) {
+        return new Job(job.jobId(), job.requestHash(), job.state(), job.result(), job.expectedTaskCount(), job.materializationState(),
+                job.startedAt(), job.completedAt(), job.submittedBy(), job.request(), targets, job.dispatch(), job.seqNo(), job.primaryTerm());
     }
 
     public static JobRequest upsert(String... ids) {
@@ -176,23 +181,28 @@ public class InMemoryJobStorage implements JobRepository, TaskRepository {
 
     @Override
     public boolean complete(JobTask task, TaskState state, Integer actualIndexMajorVersion, Integer actualIndexMinorVersion,
-                            TaskError error, Instant completedAt) {
+                            List<TargetOutcome> targetOutcomes, TaskError error, Instant completedAt) {
         return updateTask(task, t -> new JobTask(t.jobId(), t.taskId(), t.position(), t.originId(), t.referenceVersion(), state,
-                actualIndexMajorVersion, actualIndexMinorVersion, t.deletionOutcome(), error, t.createdAt(), completedAt,
+                actualIndexMajorVersion, actualIndexMinorVersion, outcomes(t, targetOutcomes), error, t.createdAt(), completedAt,
                 t.attempts(), null, t.seqNo() + 1, t.primaryTerm()));
     }
 
     @Override
-    public boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, TaskError lastError) {
+    public boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, List<TargetOutcome> targetOutcomes, TaskError lastError) {
         return updateTask(task, t -> new JobTask(t.jobId(), t.taskId(), t.position(), t.originId(), t.referenceVersion(), t.state(),
-                t.actualIndexMajorVersion(), t.actualIndexMinorVersion(), t.deletionOutcome(), lastError, t.createdAt(),
+                t.actualIndexMajorVersion(), t.actualIndexMinorVersion(), outcomes(t, targetOutcomes), lastError, t.createdAt(),
                 t.completedAt(), attempts, nextAttemptAt, t.seqNo() + 1, t.primaryTerm()));
+    }
+
+    // Like the OpenSearch repository: an empty list keeps the stored outcomes
+    private static List<TargetOutcome> outcomes(JobTask task, List<TargetOutcome> targetOutcomes) {
+        return targetOutcomes.isEmpty() ? task.targetOutcomes() : targetOutcomes;
     }
 
     @Override
     public void clearScheduledRetries(List<JobTask> cleared) {
         cleared.forEach(task -> updateTask(task, t -> new JobTask(t.jobId(), t.taskId(), t.position(), t.originId(),
-                t.referenceVersion(), t.state(), t.actualIndexMajorVersion(), t.actualIndexMinorVersion(), t.deletionOutcome(),
+                t.referenceVersion(), t.state(), t.actualIndexMajorVersion(), t.actualIndexMinorVersion(), t.targetOutcomes(),
                 t.error(), t.createdAt(), t.completedAt(), t.attempts(), null, t.seqNo() + 1, t.primaryTerm())));
     }
 
@@ -240,6 +250,6 @@ public class InMemoryJobStorage implements JobRepository, TaskRepository {
         JobRequest stored = request != null ? request : jobs.getOrDefault(job.jobId(), job).request();
         Dispatch dispatch = jobs.getOrDefault(job.jobId(), job).dispatch();
         return new Job(job.jobId(), job.requestHash(), state, result, job.expectedTaskCount(), materialization, job.startedAt(),
-                completedAt, job.submittedBy(), stored, job.target(), dispatch, job.seqNo() + (request == null ? 1 : 0), job.primaryTerm());
+                completedAt, job.submittedBy(), stored, job.targets(), dispatch, job.seqNo() + (request == null ? 1 : 0), job.primaryTerm());
     }
 }

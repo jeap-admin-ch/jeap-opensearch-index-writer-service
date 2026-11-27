@@ -1,6 +1,7 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution;
 
 import ch.admin.bit.jeap.opensearch.indextype.SearchItemIndexed;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.DeletionOutcome;
 
 import java.util.Optional;
 
@@ -12,4 +13,7 @@ public interface MaintenanceTargetWriter {
 
     @SuppressWarnings("java:S1452")
     void upsert(String physicalIndex, String documentId, SearchItemIndexed<?> searchItem);
+
+    // DELETED or ALREADY_ABSENT; a missing, blocked or otherwise refusing index is a TargetWriteException
+    DeletionOutcome delete(String physicalIndex, String documentId);
 }

@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -70,7 +71,7 @@ class TargetIndexGuardTest {
     void requireTarget_onlyChecksTheExistenceForJobsWithoutAKnownUuid() {
         Job withoutUuid = new Job(job.jobId(), job.requestHash(), job.state(), null, 1, job.materializationState(), job.startedAt(),
                 null, job.submittedBy(), job.request(),
-                new JobTarget(MajorSelection.EXPLICIT, 1, INDEX, null, JobTarget.ROLLOVER_NOT_DETECTED), Dispatch.NONE, 0, 1);
+                List.of(new JobTarget(MajorSelection.EXPLICIT, 1, INDEX, null, JobTarget.ROLLOVER_NOT_DETECTED)), Dispatch.NONE, 0, 1);
         when(writer.findIndexUuid(INDEX)).thenReturn(Optional.of("any"));
 
         assertThatCode(() -> guard.requireTarget(withoutUuid)).doesNotThrowAnyException();

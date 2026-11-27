@@ -1,6 +1,7 @@
 # Maintenance job target policy check
 
-Maintenance jobs (upsert and delete jobs) write to one fixed physical target index. A rolling index
+Maintenance jobs (upsert and delete jobs) write to one fixed physical target index per selected major
+(a delete job without `indexMajorVersion` has one per configured major, each checked). A rolling index
 would move writes to a new partition, so the target must not be managed by a rollover policy. When a
 job is created, `JobTargetAcceptanceCheck.check(targetIndex)` reads the ISM policy applied to the
 target **once** via ISM Explain (`GET _plugins/_ism/explain/<targetIndex>?show_policy=true`) and looks

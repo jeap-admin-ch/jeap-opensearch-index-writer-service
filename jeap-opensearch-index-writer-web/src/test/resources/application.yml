@@ -32,6 +32,7 @@ jeap:
           refresh-interval: "1s"
       maintenance:
         upsert-command-topic: it-upsert-search-item-command
+        delete-command-topic: it-delete-search-item-command
 
 logging:
   level:

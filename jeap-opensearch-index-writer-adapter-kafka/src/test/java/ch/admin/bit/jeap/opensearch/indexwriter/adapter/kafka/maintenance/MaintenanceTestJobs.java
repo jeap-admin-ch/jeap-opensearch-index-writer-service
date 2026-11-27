@@ -29,7 +29,7 @@ final class MaintenanceTestJobs {
                 : new JobRequest(type, null, null, "DecreeDocument", 1, List.of());
         return new Job(UUID.randomUUID(), "hash", JobState.OPEN, null, 2, MaterializationState.MATERIALIZED, NOW, null,
                 new SubmittedBy("Operator", "123"), request,
-                new JobTarget(MajorSelection.EXPLICIT, 1, "jme_decree_document_v1-000001", "uuid", JobTarget.ROLLOVER_NOT_DETECTED),
+                List.of(new JobTarget(MajorSelection.EXPLICIT, 1, "jme_decree_document_v1-000001", "uuid", JobTarget.ROLLOVER_NOT_DETECTED)),
                 Dispatch.NONE, 0, 1);
     }
 

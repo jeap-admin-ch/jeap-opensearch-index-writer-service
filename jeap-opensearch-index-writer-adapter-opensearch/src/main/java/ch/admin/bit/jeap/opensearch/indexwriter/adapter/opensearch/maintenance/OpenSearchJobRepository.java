@@ -28,6 +28,8 @@ class OpenSearchJobRepository implements JobRepository {
 
     private static final String REFRESH = "refresh";
     private static final String INDEX_MAJOR_VERSION = "indexMajorVersion";
+    private static final String INDEX_MAJOR_VERSION_FIELD = "index_major_version";
+    private static final String TARGETS = "targets";
     private static final String DISPATCH_CURSOR = "dispatch_cursor";
     private static final String DISPATCH_OWNER = "dispatch_owner";
     private static final String DISPATCH_LEASE_UNTIL = "dispatch_lease_until";
@@ -217,14 +219,39 @@ class OpenSearchJobRepository implements JobRepository {
             putIfPresent(node, "version", reference.version());
         }
 
-        JobTarget target = job.target();
-        doc.put("major_selection", Wire.of(target.selection()));
-        doc.put("resolved_index_major_version", target.indexMajorVersion());
-        doc.put("target_index", target.physicalIndex());
-        putIfPresent(doc, "target_index_uuid", target.physicalIndexUuid());
-        doc.put("rollover_detection", target.rolloverDetection());
+        // The single-target fields are kept for the first target, so that versions before schema 3 can still read the job
+        JobTarget first = job.targets().getFirst();
+        doc.put("major_selection", Wire.of(first.selection()));
+        doc.put("resolved_index_major_version", first.indexMajorVersion());
+        doc.put("target_index", first.physicalIndex());
+        putIfPresent(doc, "target_index_uuid", first.physicalIndexUuid());
+        doc.put("rollover_detection", first.rolloverDetection());
+        ArrayNode targets = doc.putArray(TARGETS);
+        for (JobTarget target : job.targets()) {
+            ObjectNode node = targets.addObject();
+            node.put(INDEX_MAJOR_VERSION_FIELD, target.indexMajorVersion());
+            node.put("index", target.physicalIndex());
+            putIfPresent(node, "index_uuid", target.physicalIndexUuid());
+            node.put("rollover_detection", target.rolloverDetection());
+        }
         putDispatch(doc, job.dispatch());
         return doc;
+    }
+
+    // Jobs stored before schema version 3 have only the single-target fields
+    private static List<JobTarget> targets(JsonNode source) {
+        MajorSelection selection = Wire.parse(MajorSelection.class, text(source, "major_selection"));
+        JsonNode stored = source.path(TARGETS);
+        if (!stored.isArray() || stored.isEmpty()) {
+            return List.of(new JobTarget(selection, source.path("resolved_index_major_version").asInt(), text(source, "target_index"),
+                    text(source, "target_index_uuid"), text(source, "rollover_detection")));
+        }
+        List<JobTarget> targets = new ArrayList<>(stored.size());
+        for (JsonNode node : stored) {
+            targets.add(new JobTarget(selection, node.path(INDEX_MAJOR_VERSION_FIELD).asInt(), text(node, "index"), text(node, "index_uuid"),
+                    text(node, "rollover_detection")));
+        }
+        return targets;
     }
 
     private Job fromHit(JsonNode hit) {
@@ -237,15 +264,12 @@ class OpenSearchJobRepository implements JobRepository {
         JobRequest request = new JobRequest(Wire.parse(JobType.class, text(source, "job_type")), text(requestNode, "messageName"),
                 text(requestNode, "topicName"), text(requestNode, "indexType"),
                 requestNode.hasNonNull(INDEX_MAJOR_VERSION) ? requestNode.path(INDEX_MAJOR_VERSION).asInt() : null, references);
-        JobTarget target = new JobTarget(Wire.parse(MajorSelection.class, text(source, "major_selection")),
-                source.path("resolved_index_major_version").asInt(), text(source, "target_index"),
-                text(source, "target_index_uuid"), text(source, "rollover_detection"));
         JsonNode submittedBy = source.path("submitted_by");
         return new Job(UUID.fromString(text(source, JOB_ID)), text(source, "request_hash"),
                 Wire.parse(JobState.class, text(source, JOB_STATE)), Wire.parse(JobResult.class, text(source, JOB_RESULT)),
                 source.path("expected_task_count").asInt(), Wire.parse(MaterializationState.class, text(source, MATERIALIZATION_STATE)),
                 instant(source, STARTED_AT), instant(source, COMPLETED_AT),
-                new SubmittedBy(text(submittedBy, "name"), text(submittedBy, "ext_id")), request, target,
+                new SubmittedBy(text(submittedBy, "name"), text(submittedBy, "ext_id")), request, targets(source),
                 // Jobs stored before schema version 2 have no dispatch fields: nothing was sent for them yet
                 new Dispatch(source.path(DISPATCH_CURSOR).asInt(0), text(source, DISPATCH_OWNER),
                         instant(source, DISPATCH_LEASE_UNTIL), instant(source, DISPATCHED_AT),

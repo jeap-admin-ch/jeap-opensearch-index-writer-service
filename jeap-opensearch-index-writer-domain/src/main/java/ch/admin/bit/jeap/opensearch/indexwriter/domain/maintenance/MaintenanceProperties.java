@@ -98,7 +98,15 @@ public class MaintenanceProperties {
     private String upsertCommandTopic;
 
     /**
-     * Number of maintenance tasks run in parallel per instance.
+     * Topic of the DeleteSearchItemCommand the service sends to itself, one per task. Must be specific to the service
+     * instance, like upsert-command-topic, and must differ from upsert-command-topic.
+     */
+    @NotBlank
+    private String deleteCommandTopic;
+
+    /**
+     * Number of maintenance tasks run in parallel per instance and command topic: upsert and delete tasks each get
+     * this many consumers, so up to twice as many tasks run in parallel per instance.
      */
     @Positive
     private int commandConsumerConcurrency = 1;
@@ -145,6 +153,12 @@ public class MaintenanceProperties {
      */
     @PositiveOrZero
     private int taskMaxRedispatches = 3;
+
+    // Both listeners share the consumer group: on a shared topic each would receive commands of the other type
+    @AssertTrue(message = "upsert-command-topic and delete-command-topic must differ")
+    public boolean isCommandTopicsDistinct() {
+        return upsertCommandTopic == null || !upsertCommandTopic.equals(deleteCommandTopic);
+    }
 
     @AssertTrue(message = "default-page-size must not exceed max-page-size")
     public boolean isDefaultPageSizeWithinMaxPageSize() {

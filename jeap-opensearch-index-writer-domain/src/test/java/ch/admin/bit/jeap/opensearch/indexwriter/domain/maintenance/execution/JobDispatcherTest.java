@@ -91,16 +91,16 @@ class JobDispatcherTest {
     }
 
     @Test
-    void dispatch_ignoresDeleteJobsAndJobsWhoseTasksAreNotAllCreated() {
+    void dispatch_sendsDeleteJobsButNoJobWhoseTasksAreNotAllCreated() {
         Job delete = materialized(InMemoryJobStorage.delete("a"), Dispatch.NONE);
-        Job materializing = InMemoryJobStorage.job(UUID.randomUUID(), InMemoryJobStorage.upsert("a"), JobState.OPEN,
+        Job materializing = InMemoryJobStorage.job(UUID.randomUUID(), InMemoryJobStorage.upsert("b"), JobState.OPEN,
                 MaterializationState.MATERIALIZING, NOW, null);
         storage.store(materializing);
 
         dispatcher.dispatch(delete);
         dispatcher.dispatch(materializing);
 
-        assertThat(sent).isEmpty();
+        assertThat(sent).containsExactly(List.of("a"));
     }
 
     @Test
@@ -130,7 +130,7 @@ class JobDispatcherTest {
         assertThat(readByConsumer).hasSize(1);
         JobTask task = readByConsumer.getFirst();
         assertThat(task.nextAttemptAt()).isNull();
-        assertThat(storage.complete(task, TaskState.SUCCEEDED, 1, 0, null, NOW))
+        assertThat(storage.complete(task, TaskState.SUCCEEDED, 1, 0, List.of(), null, NOW))
                 .as("the consumer can persist its result after dispatch has finished").isTrue();
         assertThat(storage.task(job, 0).state()).isEqualTo(TaskState.SUCCEEDED);
     }

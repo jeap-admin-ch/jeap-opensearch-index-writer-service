@@ -12,7 +12,6 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobStorage.JobRepository;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobStorage.TaskRepository;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobType;
-import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.TaskState;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.Wire;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -44,6 +43,7 @@ public class TaskCommandProcessor {
     private final JobRepository jobRepository;
     private final TaskRepository taskRepository;
     private final UpsertTaskExecutor upsertExecutor;
+    private final DeleteTaskExecutor deleteExecutor;
     private final JobClock clock;
     private final MeterRegistry meterRegistry;
     private final Map<UUID, CachedJob> jobCache = new ConcurrentHashMap<>();
@@ -123,7 +123,7 @@ public class TaskCommandProcessor {
         try {
             result = switch (job.type()) {
                 case UPSERT -> upsertExecutor.execute(job, task);
-                case DELETE -> throw new IllegalStateException("Delete jobs are not executed by this version");
+                case DELETE -> deleteExecutor.execute(job, task);
             };
         } catch (JobStorageUnavailableException e) {
             throw e;
@@ -132,12 +132,10 @@ public class TaskCommandProcessor {
             log.error("Unexpected error while running task {} of job {}", task.taskId(), job.jobId(), e);
             result = TaskResult.failed(TaskErrorCode.UNEXPECTED_ERROR, e.toString(), null);
         }
-        if (result instanceof Retry(TaskError error) && task.attempts() + 1 >= properties.getTaskMaxAttempts()) {
+        if (result instanceof Retry retry && task.attempts() + 1 >= properties.getTaskMaxAttempts()) {
             int attempts = task.attempts() + 1;
-            log.warn("Task {} of job {} failed after {} attempts: {}", task.taskId(), task.jobId(), attempts, error.message());
-            TaskError finalError = new TaskError(error.code(), "Gave up after %d attempts: %s".formatted(attempts, error.message()),
-                    error.targetIndex(), error.traceId());
-            result = new Completed(TaskState.FAILED, null, null, finalError);
+            log.warn("Task {} of job {} failed after {} attempts: {}", task.taskId(), task.jobId(), attempts, retry.error().message());
+            result = retry.exhausted(attempts);
         }
         sample.stop(Timer.builder(TASK_METRICS_NAME)
                 .tag("job_type", Wire.of(job.type()))
@@ -150,8 +148,8 @@ public class TaskCommandProcessor {
         Instant now = clock.now();
         boolean saved = switch (result) {
             case Completed completed -> taskRepository.complete(task, completed.state(), completed.actualIndexMajorVersion(),
-                    completed.actualIndexMinorVersion(), completed.error(), now);
-            case Retry retry -> saveRetry(task, retry.error(), now);
+                    completed.actualIndexMinorVersion(), completed.targetOutcomes(), completed.error(), now);
+            case Retry retry -> saveRetry(task, retry, now);
         };
         if (!saved) {
             Optional<JobTask> current = taskRepository.find(task.taskId());
@@ -168,12 +166,12 @@ public class TaskCommandProcessor {
         }
     }
 
-    private boolean saveRetry(JobTask task, TaskError error, Instant now) {
+    private boolean saveRetry(JobTask task, Retry retry, Instant now) {
         int attempts = task.attempts() + 1;
         Instant nextAttemptAt = now.plus(backoff(attempts, properties.getTaskRetryInitialBackoff(), properties.getTaskRetryMaxBackoff()));
         log.info("Task {} of job {} failed transiently (attempt {}), retrying at {}: {}", task.taskId(), task.jobId(), attempts,
-                nextAttemptAt, error.message());
-        return taskRepository.scheduleRetry(task, attempts, nextAttemptAt, error);
+                nextAttemptAt, retry.error().message());
+        return taskRepository.scheduleRetry(task, attempts, nextAttemptAt, retry.targetOutcomes(), retry.error());
     }
 
     // attempts is the number of failed attempts so far: the first retry waits initial, every further one twice as long

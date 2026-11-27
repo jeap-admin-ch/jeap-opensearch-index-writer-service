@@ -5,7 +5,9 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenancePr
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageRejectedException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageUnavailableException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobTasksNotDeletedException;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.DeletionOutcome;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.JobTask;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.TargetOutcome;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.TaskCounts;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.TaskError;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobStorage.TaskRepository;
@@ -15,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
@@ -36,8 +39,13 @@ class OpenSearchTaskRepository implements TaskRepository {
 
     private static final String QUERY = "query";
     private static final String FILTER = "filter";
+    private static final String RANGE = "range";
+    private static final String FIELD = "field";
     private static final String ATTEMPTS = "attempts";
+    private static final String ACTUAL_INDEX_MAJOR_VERSION = "actual_index_major_version";
+    private static final String ACTUAL_INDEX_MINOR_VERSION = "actual_index_minor_version";
     private static final String NEXT_ATTEMPT_AT = "next_attempt_at";
+    private static final String TARGET_OUTCOMES = "target_outcomes";
     private static final String SEQ_NO = "_seq_no";
     private static final String PRIMARY_TERM = "_primary_term";
 
@@ -76,14 +84,14 @@ class OpenSearchTaskRepository implements TaskRepository {
     @Override
     public List<JobTask> findByPositionRange(UUID jobId, int fromInclusive, int toExclusive) {
         ObjectNode range = jsonMapper.createObjectNode();
-        range.putObject("range").putObject(POSITION).put("gte", fromInclusive).put("lt", toExclusive);
+        range.putObject(RANGE).putObject(POSITION).put("gte", fromInclusive).put("lt", toExclusive);
         return search(jobId, Math.max(toExclusive - fromInclusive, 0), List.of(termNode(JOB_ID, jobId.toString()), range), List.of());
     }
 
     @Override
     public List<JobTask> findDueRetries(UUID jobId, Instant dueAt, int afterPosition, int limit) {
         ObjectNode due = jsonMapper.createObjectNode();
-        due.putObject("range").putObject(NEXT_ATTEMPT_AT).put("lte", dueAt.truncatedTo(ChronoUnit.MILLIS).toString());
+        due.putObject(RANGE).putObject(NEXT_ATTEMPT_AT).put("lte", dueAt.truncatedTo(ChronoUnit.MILLIS).toString());
         return search(jobId, limit, List.of(termNode(JOB_ID, jobId.toString()), termNode(TASK_STATE, Wire.of(TaskState.OPEN)),
                 due, positionAfter(afterPosition)), List.of());
     }
@@ -91,14 +99,14 @@ class OpenSearchTaskRepository implements TaskRepository {
     @Override
     public List<JobTask> findOpenUnscheduled(UUID jobId, int afterPosition, int limit) {
         ObjectNode scheduled = jsonMapper.createObjectNode();
-        scheduled.putObject("exists").put("field", NEXT_ATTEMPT_AT);
+        scheduled.putObject("exists").put(FIELD, NEXT_ATTEMPT_AT);
         return search(jobId, limit, List.of(termNode(JOB_ID, jobId.toString()), termNode(TASK_STATE, Wire.of(TaskState.OPEN)),
                 positionAfter(afterPosition)), List.of(scheduled));
     }
 
     private ObjectNode positionAfter(int afterPosition) {
         ObjectNode range = jsonMapper.createObjectNode();
-        range.putObject("range").putObject(POSITION).put("gt", afterPosition);
+        range.putObject(RANGE).putObject(POSITION).put("gt", afterPosition);
         return range;
     }
 
@@ -133,24 +141,57 @@ class OpenSearchTaskRepository implements TaskRepository {
 
     @Override
     public boolean complete(JobTask task, TaskState state, Integer actualIndexMajorVersion, Integer actualIndexMinorVersion,
-                            TaskError error, Instant completedAt) {
+                            List<TargetOutcome> targetOutcomes, TaskError error, Instant completedAt) {
         ObjectNode doc = jsonMapper.createObjectNode();
         doc.put(TASK_STATE, Wire.of(state));
         doc.put(COMPLETED_AT, completedAt.truncatedTo(ChronoUnit.MILLIS).toString());
-        doc.put("actual_index_major_version", actualIndexMajorVersion);
-        doc.put("actual_index_minor_version", actualIndexMinorVersion);
+        doc.put(ACTUAL_INDEX_MAJOR_VERSION, actualIndexMajorVersion);
+        doc.put(ACTUAL_INDEX_MINOR_VERSION, actualIndexMinorVersion);
+        putTargetOutcomes(doc, targetOutcomes);
         doc.set(ERROR, errorNode(error));
         doc.putNull(NEXT_ATTEMPT_AT);
         return conditionalUpdate(task, doc);
     }
 
     @Override
-    public boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, TaskError lastError) {
+    public boolean scheduleRetry(JobTask task, int attempts, Instant nextAttemptAt, List<TargetOutcome> targetOutcomes, TaskError lastError) {
         ObjectNode doc = jsonMapper.createObjectNode();
         doc.put(ATTEMPTS, attempts);
         doc.put(NEXT_ATTEMPT_AT, nextAttemptAt.truncatedTo(ChronoUnit.MILLIS).toString());
+        putTargetOutcomes(doc, targetOutcomes);
         doc.set(ERROR, errorNode(lastError));
         return conditionalUpdate(task, doc);
+    }
+
+    // An empty list (upsert tasks, or a delete task that failed before any target was processed) keeps what is stored
+    private void putTargetOutcomes(ObjectNode doc, List<TargetOutcome> targetOutcomes) {
+        if (targetOutcomes.isEmpty()) {
+            return;
+        }
+        ArrayNode outcomes = doc.putArray(TARGET_OUTCOMES);
+        for (TargetOutcome outcome : targetOutcomes) {
+            ObjectNode node = outcomes.addObject();
+            node.put("index_major_version", outcome.indexMajorVersion());
+            node.put("target_index", outcome.targetIndex());
+            putIfPresent(node, "outcome", Wire.of(outcome.outcome()));
+            if (outcome.error() != null) {
+                node.set(ERROR, errorNode(outcome.error()));
+            }
+        }
+    }
+
+    private static List<TargetOutcome> targetOutcomes(JsonNode source) {
+        List<TargetOutcome> outcomes = new ArrayList<>();
+        for (JsonNode node : source.path(TARGET_OUTCOMES)) {
+            outcomes.add(new TargetOutcome(node.path("index_major_version").asInt(), text(node, "target_index"),
+                    Wire.parse(DeletionOutcome.class, text(node, "outcome")), taskError(node.path(ERROR))));
+        }
+        return outcomes;
+    }
+
+    private static TaskError taskError(JsonNode error) {
+        return error.isObject()
+                ? new TaskError(text(error, "code"), text(error, "message"), text(error, "target_index"), text(error, "trace_id")) : null;
     }
 
     // A task changed in the meantime (409) was already picked up by the consumer and is left alone
@@ -222,8 +263,8 @@ class OpenSearchTaskRepository implements TaskRepository {
         body.put("track_total_hits", true);
         body.putObject(QUERY).putObject("bool").putArray(FILTER).add(termNode(JOB_ID, jobId.toString()));
         ObjectNode aggs = body.putObject("aggs");
-        aggs.putObject("states").putObject("terms").put("field", TASK_STATE);
-        aggs.putObject("last_completed").putObject("max").put("field", COMPLETED_AT);
+        aggs.putObject("states").putObject("terms").put(FIELD, TASK_STATE);
+        aggs.putObject("last_completed").putObject("max").put(FIELD, COMPLETED_AT);
         MaintenanceStoreClient.Result result = client.execute("POST", "/" + properties.getTaskIndex() + "/_search", Map.of(), body);
         requireOk(result, "count tasks of job " + jobId);
         Map<TaskState, Integer> byState = new EnumMap<>(TaskState.class);
@@ -273,15 +314,13 @@ class OpenSearchTaskRepository implements TaskRepository {
 
     private JobTask fromHit(JsonNode hit) {
         JsonNode source = hit.path("_source");
-        JsonNode error = source.path(ERROR);
-        TaskError taskError = error.isObject()
-                ? new TaskError(text(error, "code"), text(error, "message"), text(error, "target_index"), text(error, "trace_id")) : null;
+        TaskError taskError = taskError(source.path(ERROR));
         return new JobTask(UUID.fromString(text(source, JOB_ID)), UUID.fromString(text(source, "task_id")),
                 source.path(POSITION).asInt(), text(source, "origin_id"), text(source, "reference_version"),
                 Wire.parse(TaskState.class, text(source, TASK_STATE)),
-                source.hasNonNull("actual_index_major_version") ? source.path("actual_index_major_version").asInt() : null,
-                source.hasNonNull("actual_index_minor_version") ? source.path("actual_index_minor_version").asInt() : null,
-                text(source, "deletion_outcome"), taskError, instant(source, "created_at"), instant(source, COMPLETED_AT),
+                source.hasNonNull(ACTUAL_INDEX_MAJOR_VERSION) ? source.path(ACTUAL_INDEX_MAJOR_VERSION).asInt() : null,
+                source.hasNonNull(ACTUAL_INDEX_MINOR_VERSION) ? source.path(ACTUAL_INDEX_MINOR_VERSION).asInt() : null,
+                targetOutcomes(source), taskError, instant(source, "created_at"), instant(source, COMPLETED_AT),
                 // Tasks created before schema version 2 have no attempts
                 source.path(ATTEMPTS).asInt(0), instant(source, NEXT_ATTEMPT_AT),
                 hit.path(SEQ_NO).asLong(), hit.path(PRIMARY_TERM).asLong());

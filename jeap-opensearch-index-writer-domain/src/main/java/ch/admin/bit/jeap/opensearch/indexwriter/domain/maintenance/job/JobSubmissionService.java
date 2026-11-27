@@ -63,16 +63,15 @@ public class JobSubmissionService {
         }
 
         validateAgainstConfiguration(request);
-        IndexType<?> indexType = resolveIndexType(request);
-        JobTarget target = resolveTarget(request, indexType);
+        List<JobTarget> targets = resolveTargets(request);
         Job job = new Job(submission.jobId(), requestHash, JobState.OPEN, null, request.references().size(),
-                MaterializationState.MATERIALIZING, clock.now(), null, submission.submittedBy(), request, target, Dispatch.NONE, 0, 0);
+                MaterializationState.MATERIALIZING, clock.now(), null, submission.submittedBy(), request, targets, Dispatch.NONE, 0, 0);
         if (!jobRepository.create(job)) {
             Job concurrent = jobRepository.find(submission.jobId(), false).orElseThrow(() -> new JobConflictException(submission.jobId()));
             return resumeExisting(concurrent, requestHash);
         }
-        log.info("Stored {} job {} with {} references for target {}", Wire.of(request.type()), job.jobId(),
-                job.expectedTaskCount(), target.physicalIndex());
+        log.info("Stored {} job {} with {} references for targets {}", Wire.of(request.type()), job.jobId(),
+                job.expectedTaskCount(), targets.stream().map(JobTarget::physicalIndex).toList());
         Job stored = jobRepository.find(job.jobId(), false).orElseThrow(() -> new JobConflictException(job.jobId()));
         // The report answering this request needs the references just stored, in the same order
         referenceCache.put(stored, request.references());
@@ -246,22 +245,32 @@ public class JobSubmissionService {
         }
     }
 
-    private IndexType<?> resolveIndexType(JobRequest request) {
+    // A delete without indexMajorVersion covers every major configured for the index type now; later deployments never
+    // widen an accepted job. Each target passes the acceptance check, a single refused target rejects the whole job.
+    private List<JobTarget> resolveTargets(JobRequest request) {
         if (request.indexMajorVersion() != null) {
-            return indexTypeRepository.findByOriginTypeAndMajorVersion(request.indexType(), request.indexMajorVersion())
+            IndexType<?> indexType = indexTypeRepository.findByOriginTypeAndMajorVersion(request.indexType(), request.indexMajorVersion())
                     .orElseThrow(() -> new InvalidJobException("Index type '%s' has no configured schema major %d"
                             .formatted(request.indexType(), request.indexMajorVersion())));
+            return List.of(resolveTarget(MajorSelection.EXPLICIT, indexType));
         }
-        return indexTypeRepository.findHighestMajorVersion(request.indexType())
+        if (request.type() == JobType.DELETE) {
+            List<IndexType<?>> indexTypes = indexTypeRepository.findAllMajorVersions(request.indexType());
+            if (indexTypes.isEmpty()) {
+                throw new InvalidJobException("Unknown index type '%s'".formatted(request.indexType()));
+            }
+            return indexTypes.stream().map(indexType -> resolveTarget(MajorSelection.ALL, indexType)).toList();
+        }
+        IndexType<?> highest = indexTypeRepository.findHighestMajorVersion(request.indexType())
                 .orElseThrow(() -> new InvalidJobException("Unknown index type '%s'".formatted(request.indexType())));
+        return List.of(resolveTarget(MajorSelection.HIGHEST, highest));
     }
 
-    private JobTarget resolveTarget(JobRequest request, IndexType<?> indexType) {
+    private JobTarget resolveTarget(MajorSelection selection, IndexType<?> indexType) {
         ResolvedTarget resolved = targetResolver.resolveWriteTarget(indexType.indexWriteAlias());
         JobTargetAcceptance acceptance = acceptanceCheck.check(resolved.physicalIndex()).requireAllowed();
         String rollover = acceptance.outcome() == PolicyCheckOutcome.POLICY_UNDETERMINED
                 ? JobTarget.ROLLOVER_UNDETERMINED : JobTarget.ROLLOVER_NOT_DETECTED;
-        MajorSelection selection = request.indexMajorVersion() != null ? MajorSelection.EXPLICIT : MajorSelection.HIGHEST;
         return new JobTarget(selection, indexType.majorVersion(), resolved.physicalIndex(), resolved.physicalIndexUuid(), rollover);
     }
 

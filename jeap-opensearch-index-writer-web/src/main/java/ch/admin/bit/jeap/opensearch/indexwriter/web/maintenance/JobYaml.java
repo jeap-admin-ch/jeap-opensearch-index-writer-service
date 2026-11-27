@@ -97,16 +97,14 @@ class JobYaml {
     JobDtos.JobReport toDto(JobModel.JobReport report) {
         Job job = report.job();
         JobRequest request = job.request();
+        boolean upsert = request.type() == JobType.UPSERT;
         List<ReportReference> references = new ArrayList<>(report.entries().size());
         for (ReportEntry entry : report.entries()) {
             references.add(new ReportReference(entry.taskId().toString(), entry.originId(), Wire.of(entry.state()), entry.version(),
-                    entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.deletionOutcome(), entry.attempts(),
-                    entry.error() == null ? null : new ReportError(entry.error().code(), entry.error().message(),
-                            entry.error().targetIndex(), entry.error().traceId())));
+                    entry.actualIndexMajorVersion(), entry.actualIndexMinorVersion(), entry.attempts(), error(entry.error()),
+                    entry.targets() == null ? null : entry.targets().stream().map(JobYaml::targetOutcome).toList()));
         }
-        JobTarget target = job.target();
-        boolean upsert = request.type() == JobType.UPSERT;
-        // The input sections echo the submitted selector (absent if omitted); the resolved major is reported in target
+        // The input sections echo the submitted selector (absent if omitted); the resolved majors are reported in the targets
         return new JobDtos.JobReport(
                 upsert ? new Message(request.messageName(), request.topicName()) : null,
                 upsert ? new ReportOperation(request.indexType(), IndexOperation.UPSERT.name(), request.indexMajorVersion()) : null,
@@ -120,10 +118,25 @@ class JobYaml {
                         report.summary().open(), report.summary().succeeded(), report.summary().failed(),
                         report.summary().indexingDisabled()),
                 references, new ReportPage(report.limit(), references.size(), report.nextCursor()),
-                new ReportTarget(Wire.of(target.selection()), target.indexMajorVersion(), target.physicalIndex(), target.rolloverDetection()),
+                upsert ? target(job.target()) : null,
+                upsert ? null : Wire.of(job.selection()),
+                upsert ? null : job.targets().stream()
+                        .map(t -> new ReportJobTarget(t.indexMajorVersion(), t.physicalIndex(), t.rolloverDetection())).toList(),
                 dispatch(job),
                 Wire.of(job.result()),
                 job.completedAt() == null ? null : job.completedAt().truncatedTo(ChronoUnit.SECONDS).toString());
+    }
+
+    private static ReportTarget target(JobTarget target) {
+        return new ReportTarget(Wire.of(target.selection()), target.indexMajorVersion(), target.physicalIndex(), target.rolloverDetection());
+    }
+
+    private static ReportTargetOutcome targetOutcome(TargetOutcome outcome) {
+        return new ReportTargetOutcome(outcome.indexMajorVersion(), outcome.targetIndex(), Wire.of(outcome.outcome()), error(outcome.error()));
+    }
+
+    private static ReportError error(TaskError error) {
+        return error == null ? null : new ReportError(error.code(), error.message(), error.targetIndex(), error.traceId());
     }
 
     private static ReportDispatch dispatch(Job job) {

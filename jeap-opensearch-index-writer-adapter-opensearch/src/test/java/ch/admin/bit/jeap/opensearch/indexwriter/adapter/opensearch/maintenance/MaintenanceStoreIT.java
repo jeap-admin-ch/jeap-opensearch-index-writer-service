@@ -35,6 +35,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static tools.jackson.databind.cfg.DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS;
 
@@ -82,7 +83,7 @@ class MaintenanceStoreIT {
         JobRequest request = new JobRequest(JobType.UPSERT, "Msg", "topic", "DecreeDocument", 1, references);
         return new Job(id, "hash", JobState.OPEN, null, expectedTasks, MaterializationState.MATERIALIZING,
                 Instant.parse("2026-10-23T09:00:00Z"), null, new SubmittedBy("Operator", "123"), request,
-                new JobTarget(MajorSelection.EXPLICIT, 1, "idx-000001", "uuid", JobTarget.ROLLOVER_NOT_DETECTED), Dispatch.NONE, 0, 0);
+                List.of(new JobTarget(MajorSelection.EXPLICIT, 1, "idx-000001", "uuid", JobTarget.ROLLOVER_NOT_DETECTED)), Dispatch.NONE, 0, 0);
     }
 
     private static JobTask task(UUID jobId, int position, String originId) {
@@ -375,8 +376,10 @@ class MaintenanceStoreIT {
     void initializer_upgradesIndicesOfSchemaVersion1InPlace() {
         MaintenanceProperties properties = properties("upgrade");
         createVersion1Index("upgrade_jobs", "maintenance-index-mappings/job-index.json",
-                "dispatch_cursor", "dispatch_owner", "dispatch_lease_until", "dispatched_at");
-        createVersion1Index("upgrade_tasks", "maintenance-index-mappings/task-index.json", "attempts", "next_attempt_at");
+                "dispatch_cursor", "dispatch_owner", "dispatch_lease_until", "dispatched_at", "dispatch_redispatches",
+                "dispatch_stuck_at", "targets");
+        createVersion1Index("upgrade_tasks", "maintenance-index-mappings/task-index.json", "attempts", "next_attempt_at",
+                "target_outcomes");
         UUID jobId = UUID.randomUUID();
         JobTask stored = task(jobId, 0, "a");
         client.execute("PUT", "/upgrade_tasks/_doc/" + stored.taskId(), Map.of("refresh", "true"), jsonMapper.readTree("""
@@ -387,11 +390,13 @@ class MaintenanceStoreIT {
         initialize(properties);
 
         JsonNode tasks = client.execute("GET", "/upgrade_tasks/_mapping", Map.of(), null).body().path("upgrade_tasks").path("mappings");
-        assertThat(tasks.path("_meta").path("maintenance_schema_version").asInt()).isEqualTo(2);
+        assertThat(tasks.path("_meta").path("maintenance_schema_version").asInt()).isEqualTo(3);
+        assertThat(tasks.path("properties").has("target_outcomes")).isTrue();
         assertThat(tasks.path("properties").has("attempts")).isTrue();
         assertThat(tasks.path("properties").has("next_attempt_at")).isTrue();
         JsonNode jobs = client.execute("GET", "/upgrade_jobs/_mapping", Map.of(), null).body().path("upgrade_jobs").path("mappings");
         assertThat(jobs.path("properties").has("dispatch_cursor")).isTrue();
+        assertThat(jobs.path("properties").has("targets")).isTrue();
         JobTask read = new OpenSearchTaskRepository(client, properties, jsonMapper).find(stored.taskId()).orElseThrow();
         assertThat(read.attempts()).as("a task stored before the upgrade has no attempts").isZero();
     }
@@ -400,10 +405,13 @@ class MaintenanceStoreIT {
     void initializer_acceptsANewerSchemaVersionThatHasEveryProperty() {
         MaintenanceProperties properties = properties("newer");
         initialize(properties);
+        int newer = bundledSchemaVersion("maintenance-index-mappings/task-index.json") + 1;
         client.execute("PUT", "/newer_tasks/_mapping", Map.of(), jsonMapper.readTree("""
-                {"_meta":{"maintenance_schema_version":3},"properties":{"future_field":{"type":"keyword"}}}"""));
+                {"_meta":{"maintenance_schema_version":%d},"properties":{"future_field":{"type":"keyword"}}}""".formatted(newer)));
 
-        initialize(properties);
+        assertThatCode(() -> initialize(properties)).doesNotThrowAnyException();
+        JsonNode tasks = client.execute("GET", "/newer_tasks/_mapping", Map.of(), null).body().path("newer_tasks").path("mappings");
+        assertThat(tasks.path("_meta").path("maintenance_schema_version").asInt()).as("a newer version is kept").isEqualTo(newer);
     }
 
     @Test
@@ -437,10 +445,10 @@ class MaintenanceStoreIT {
         TaskError transientError = new TaskError("SOURCE_UNAVAILABLE", "HTTP 503", null, "trace-1");
         JobTask a = repository.find(JobModel.taskId(jobId, "a")).orElseThrow();
 
-        assertThat(repository.scheduleRetry(a, 1, due, transientError)).isTrue();
-        assertThat(repository.scheduleRetry(a, 1, due, transientError)).as("stale version").isFalse();
-        assertThat(repository.complete(repository.find(JobModel.taskId(jobId, "b")).orElseThrow(), TaskState.SUCCEEDED, 1, 2, null, due)).isTrue();
-        assertThat(repository.complete(repository.find(JobModel.taskId(jobId, "c")).orElseThrow(), TaskState.INDEXING_DISABLED, null, null, null, due)).isTrue();
+        assertThat(repository.scheduleRetry(a, 1, due, List.of(), transientError)).isTrue();
+        assertThat(repository.scheduleRetry(a, 1, due, List.of(), transientError)).as("stale version").isFalse();
+        assertThat(repository.complete(repository.find(JobModel.taskId(jobId, "b")).orElseThrow(), TaskState.SUCCEEDED, 1, 2, List.of(), null, due)).isTrue();
+        assertThat(repository.complete(repository.find(JobModel.taskId(jobId, "c")).orElseThrow(), TaskState.INDEXING_DISABLED, null, null, List.of(), null, due)).isTrue();
         repository.refresh();
 
         JobTask retried = repository.find(a.taskId()).orElseThrow();
@@ -463,7 +471,7 @@ class MaintenanceStoreIT {
         assertThat(repository.findOpenUnscheduled(jobId, -1, 10)).extracting(JobTask::originId).containsExactly("a");
 
         JobTask cleared = repository.find(a.taskId()).orElseThrow();
-        assertThat(repository.complete(cleared, TaskState.SUCCEEDED, 1, 0, null, due)).isTrue();
+        assertThat(repository.complete(cleared, TaskState.SUCCEEDED, 1, 0, List.of(), null, due)).isTrue();
         assertThat(repository.find(a.taskId()).orElseThrow().error()).as("the last transient error is cleared").isNull();
     }
 
@@ -488,6 +496,74 @@ class MaintenanceStoreIT {
                 });
     }
 
+    @Test
+    void jobRepository_storesEveryTargetAndReadsJobsStoredWithASingleTarget() {
+        MaintenanceProperties properties = properties("multitarget");
+        initialize(properties);
+        OpenSearchJobRepository repository = new OpenSearchJobRepository(client, properties, jsonMapper);
+        UUID id = UUID.randomUUID();
+        Job single = job(id, 1, List.of(new JobReference("a", null)));
+        List<JobTarget> targets = List.of(
+                new JobTarget(MajorSelection.ALL, 1, "decree_v1-000001", "u1", JobTarget.ROLLOVER_NOT_DETECTED),
+                new JobTarget(MajorSelection.ALL, 2, "decree_v2-000001", "u2", JobTarget.ROLLOVER_UNDETERMINED));
+        repository.create(new Job(id, single.requestHash(), single.state(), null, 1, single.materializationState(), single.startedAt(),
+                null, single.submittedBy(), single.request(), targets, Dispatch.NONE, 0, 0));
+
+        assertThat(repository.find(id, false).orElseThrow().targets()).isEqualTo(targets);
+
+        UUID legacyId = UUID.randomUUID();
+        client.execute("PUT", "/multitarget_jobs/_doc/" + legacyId, Map.of("refresh", "true"), jsonMapper.readTree("""
+                {"job_id":"%s","job_type":"delete","request_hash":"h","job_state":"open","expected_task_count":1,
+                 "materialization_state":"materialized","started_at":"2026-11-24T09:00:00.000Z","request":{"indexType":"DecreeDocument"},
+                 "major_selection":"highest","resolved_index_major_version":2,"target_index":"decree_v2-000001",
+                 "target_index_uuid":"u2","rollover_detection":"not-detected"}
+                """.formatted(legacyId)));
+        assertThat(repository.find(legacyId, false).orElseThrow().targets())
+                .containsExactly(new JobTarget(MajorSelection.HIGHEST, 2, "decree_v2-000001", "u2", JobTarget.ROLLOVER_NOT_DETECTED));
+    }
+
+    @Test
+    void taskRepository_storesTheOutcomePerTargetAndKeepsItWhenNoneIsGiven() {
+        MaintenanceProperties properties = properties("outcomes");
+        initialize(properties);
+        OpenSearchTaskRepository repository = new OpenSearchTaskRepository(client, properties, jsonMapper);
+        UUID jobId = UUID.randomUUID();
+        repository.createMissing(List.of(task(jobId, 0, "a")));
+        TaskError unavailable = new TaskError("TARGET_UNAVAILABLE", "HTTP 503", "decree_v2-000001", null);
+        List<TargetOutcome> partial = List.of(new TargetOutcome(1, "decree_v1-000001", DeletionOutcome.DELETED, null),
+                new TargetOutcome(2, "decree_v2-000001", null, unavailable));
+        JobTask task = repository.find(JobModel.taskId(jobId, "a")).orElseThrow();
+
+        assertThat(repository.scheduleRetry(task, 1, Instant.parse("2026-11-27T10:00:00Z"), partial, unavailable)).isTrue();
+        JobTask retried = repository.find(task.taskId()).orElseThrow();
+        assertThat(retried.targetOutcomes()).isEqualTo(partial);
+
+        assertThat(repository.complete(retried, TaskState.FAILED, null, null, List.of(),
+                new TaskError("UNEXPECTED_ERROR", "defect", null, null), Instant.parse("2026-11-27T10:01:00Z"))).isTrue();
+        assertThat(repository.find(task.taskId()).orElseThrow().targetOutcomes()).as("an empty list keeps the stored outcomes").isEqualTo(partial);
+    }
+
+    @Test
+    void targetWriter_deleteReportsDeletedAlreadyAbsentMissingAndBlockedIndices() {
+        client.execute("PUT", "/delete_v1-000001", Map.of(), jsonMapper.readTree("""
+                {"mappings":{"dynamic":false,"properties":{"origin":{"properties":{"id":{"type":"keyword"}}}}}}"""));
+        client.execute("PUT", "/delete_v1-000001/_doc/doc-1", Map.of("refresh", "true"), jsonMapper.readTree("{\"origin\":{\"id\":\"doc-1\"}}"));
+        OpenSearchMaintenanceTargetWriter writer = new OpenSearchMaintenanceTargetWriter(openSearchClient, client);
+
+        assertThat(writer.delete("delete_v1-000001", "doc-1")).isEqualTo(DeletionOutcome.DELETED);
+        assertThat(writer.delete("delete_v1-000001", "doc-1")).isEqualTo(DeletionOutcome.ALREADY_ABSENT);
+        assertThatThrownBy(() -> writer.delete("gone_v1-000001", "doc-1"))
+                .isInstanceOfSatisfying(TargetWriteException.class, e -> assertThat(e.getCode()).isEqualTo(TaskErrorCode.TARGET_INDEX_MISSING));
+        assertThat(client.execute("HEAD", "/gone_v1-000001", Map.of(), null).status()).as("a delete creates no index").isEqualTo(404);
+
+        client.execute("PUT", "/delete_v1-000001/_settings", Map.of(), jsonMapper.readTree("{\"index.blocks.write\":true}"));
+        assertThatThrownBy(() -> writer.delete("delete_v1-000001", "doc-2"))
+                .isInstanceOfSatisfying(TargetWriteException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(TaskErrorCode.INDEX_NOT_WRITABLE);
+                    assertThat(e.isRetryable()).isFalse();
+                });
+    }
+
     private static void createVersion1Index(String index, String mappingResource, String... newProperties) {
         try (var in = MaintenanceStoreIT.class.getClassLoader().getResourceAsStream(mappingResource)) {
             ObjectNode definition = (ObjectNode) jsonMapper.readTree(in);
@@ -497,6 +573,14 @@ class MaintenanceStoreIT {
                 ((ObjectNode) mappings.path("properties")).remove(property);
             }
             assertThat(client.execute("PUT", "/" + index, Map.of(), definition).ok()).isTrue();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static int bundledSchemaVersion(String mappingResource) {
+        try (var in = MaintenanceStoreIT.class.getClassLoader().getResourceAsStream(mappingResource)) {
+            return jsonMapper.readTree(in).path("mappings").path("_meta").path("maintenance_schema_version").asInt();
         } catch (java.io.IOException e) {
             throw new IllegalStateException(e);
         }

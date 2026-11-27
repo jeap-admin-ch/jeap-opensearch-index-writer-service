@@ -39,21 +39,25 @@ On startup, the service verifies that a consumer contract exists for every messa
 
 ## Maintenance command contracts
 
-With [maintenance jobs](maintenance-jobs.md) enabled, the service sends an `UpsertSearchItemCommand` per task to itself on
-`jeap.opensearch.indexwriter.maintenance.upsert-command-topic`. As this topic is specific to the service instance, the
-instance declares the producer and the consumer contract for it, e.g. next to the template annotation:
+With [maintenance jobs](maintenance-jobs.md) enabled, the service sends itself one command per task: an
+`UpsertSearchItemCommand` on `jeap.opensearch.indexwriter.maintenance.upsert-command-topic` and a `DeleteSearchItemCommand`
+on `jeap.opensearch.indexwriter.maintenance.delete-command-topic`. As these topics are specific to the service instance,
+the instance declares the producer and the consumer contract for both, e.g. next to the template annotation:
 
 ```java
 @JeapMessageConsumerContractsByTemplates(appName = "my-opensearch-index-writer")
 @JeapMessageProducerContract(value = UpsertSearchItemCommand.TypeRef.class, topic = "my-system-upsert-search-item-command")
 @JeapMessageConsumerContract(value = UpsertSearchItemCommand.TypeRef.class, topic = "my-system-upsert-search-item-command")
+@JeapMessageProducerContract(value = DeleteSearchItemCommand.TypeRef.class, topic = "my-system-delete-search-item-command")
+@JeapMessageConsumerContract(value = DeleteSearchItemCommand.TypeRef.class, topic = "my-system-delete-search-item-command")
 @SpringBootApplication
 public class MyOpenSearchIndexWriterApplication {
 }
 ```
 
-`UpsertSearchItemCommand` comes from `ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command`, a transitive dependency
-of the service. With maintenance enabled, startup fails if either contract is missing.
+The commands come from `ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command` and
+`ch.admin.bit.jeap.messagetype.jeap:delete-search-item-command`, transitive dependencies of the service. With
+maintenance enabled, startup fails if any of these contracts is missing.
 
 ## Related
 

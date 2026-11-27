@@ -1,6 +1,6 @@
 # Maintenance jobs
 
-Operators submit upsert or delete jobs through a YAML REST API and read a YAML report. Upsert jobs are **run** in the background (see [Running upsert jobs](#running-upsert-jobs)); delete jobs are stored and reported, but not yet run.
+Operators submit upsert or delete jobs through a YAML REST API and read a YAML report. Both job types are **run** in the background, see [Running upsert jobs](#running-upsert-jobs) and [Running delete jobs](#running-delete-jobs).
 
 Everything on this page is active only with `jeap.opensearch.indexwriter.maintenance.enabled=true` (default `false`). When disabled there are no endpoints, no OpenAPI entries, no index initialisation, no housekeeping, and normal indexing is unaffected.
 
@@ -32,7 +32,7 @@ originReferences:
 ```
 
 ```yaml
-# delete
+# delete, from schema major 1 only; without indexMajorVersion from every configured major
 indexType: DecreeDocument
 indexMajorVersion: 1
 originReferences:
@@ -42,19 +42,19 @@ originReferences:
 
 ## Schema major
 
-Each job selects exactly one `indexMajorVersion`. If omitted, the highest configured major of the index type is used. The reference `version` of an upsert is stored and reported only: it never selects a schema, a provider request or a rollback. Delete references have IDs only; a `version` or a rollback-control field is rejected.
+An upsert job selects exactly one `indexMajorVersion`; if omitted, the highest configured major of the index type is used. A delete job with `indexMajorVersion` deletes from that major only; if omitted, it deletes from **every** major configured for the index type in the deployed writer when the job is accepted (selection `all`). The reference `version` of an upsert is stored and reported only: it never selects a schema, a provider request or a rollback. Delete references have IDs only; a `version` or a rollback-control field is rejected.
 
-The selection (explicit or highest), the major and the target are resolved once and stored. Later deployments and recovery never choose another target.
+The selection (explicit, highest or all), the majors and their targets are resolved once and stored. Later deployments and recovery never choose another target, and a major deployed after acceptance is not added to an accepted job; submit a new job to include it. Delete jobs accepted before 8.0.0 without `indexMajorVersion` keep their single highest-major target.
 
 ## Submission checks
 
-The whole request is rejected (nothing stored) for invalid YAML or UUID, unknown schema major, duplicate IDs (regardless of version), reference IDs or versions longer than 512 characters or containing control characters, or exceeded limits (`max-references`, `max-request-bytes`). A target refused by the acceptance check (rollover policy, multi-index layout) gives `422 NOT_ALLOWED`; a write alias of the selected major that does not exist, does not point to a concrete index or has `is_write_index=false` gives `422 TARGET_INVALID`.
+The whole request is rejected (nothing stored) for invalid YAML or UUID, unknown schema major, duplicate IDs (regardless of version), reference IDs or versions longer than 512 characters or containing control characters, or exceeded limits (`max-references`, `max-request-bytes`). A target refused by the acceptance check (rollover policy, multi-index layout) gives `422 NOT_ALLOWED`; for a delete job targeting several majors, one refused target rejects the whole job; a write alias of the selected major that does not exist, does not point to a concrete index or has `is_write_index=false` gives `422 TARGET_INVALID`.
 
 Same UUID and equivalent content returns the existing job, even if the configuration or `max-references` changed since the first submission; `max-request-bytes` always applies, as the body is read before it can be compared. A changed schema selector or reference version gives `409`. Submitter data and timestamps do not affect equivalence. Deliberate retries use a new UUID; idempotency ends when the retained job is cleaned up.
 
 ## Initialisation and storage
 
-On startup the service creates the missing job and task indices (`jeap_indexwriter_jobs`, `jeap_indexwriter_tasks`) from the bundled mappings and reuses compatible existing ones. An index of an older schema version (`_meta.maintenance_schema_version`) is upgraded in place: the missing properties are added and existing documents are kept. An index of a newer version is accepted if it has every property this version needs. Versions before 7.0.0 require an exact schema version and therefore no longer start once 7.0.0 has upgraded the indices: upgrade all instances together. Before rolling back below 7.0.0, reset the version on both indices, the added properties can stay: `PUT /<index>/_mapping` with `{"_meta": {"maintenance_schema_version": 1}}`. Concurrent starts are safe. An incompatible index stops startup and is never recreated automatically. The `maintenance.*` settings are only read and validated when the feature is enabled. Housekeeping runs on its own thread; enabling maintenance does not turn on Spring scheduling for the rest of the service. Shards, replicas and refresh interval are taken from `index-settings` when an index is created; existing indices keep theirs, so change replicas or the refresh interval of an existing index directly in OpenSearch (`PUT /<index>/_settings`). If a job or task index is deleted while the service runs, requests fail with a storage error until the service is restarted and recreates it. Exclude both indices from `action.auto_create_index` on the cluster, so that a write cannot recreate them without the bundled mapping.
+On startup the service creates the missing job and task indices (`jeap_indexwriter_jobs`, `jeap_indexwriter_tasks`) from the bundled mappings and reuses compatible existing ones. An index of an older schema version (`_meta.maintenance_schema_version`) is upgraded in place: the missing properties are added and existing documents are kept. An index of a newer version is accepted if it has every property this version needs. Versions before 7.0.0 require an exact schema version and therefore no longer start once 7.0.0 has upgraded the indices: upgrade all instances together. Before rolling back below 7.0.0, reset the version on both indices, the added properties can stay: `PUT /<index>/_mapping` with `{"_meta": {"maintenance_schema_version": 1}}`. From 7.0.0 on, newer schema versions are accepted: 7.0.0 starts on the schema version 3 indices of 8.0.0 without a reset, but it does not run delete jobs and reports only their first target. 7.0.0 cannot read a delete job with selection `all` (submitted without `indexMajorVersion`): a single such job stops the 7.0.0 housekeeping for every job and its report fails. Before rolling back to 7.0.0, delete these jobs (`major_selection: all` in the job index) together with their tasks (by `job_id` in the task index). Concurrent starts are safe. An incompatible index stops startup and is never recreated automatically. The `maintenance.*` settings are only read and validated when the feature is enabled. Housekeeping runs on its own thread; enabling maintenance does not turn on Spring scheduling for the rest of the service. Shards, replicas and refresh interval are taken from `index-settings` when an index is created; existing indices keep theirs, so change replicas or the refresh interval of an existing index directly in OpenSearch (`PUT /<index>/_settings`). If a job or task index is deleted while the service runs, requests fail with a storage error until the service is restarted and recreates it. Exclude both indices from `action.auto_create_index` on the cluster, so that a write cannot recreate them without the bundled mapping.
 
 A job is confirmed only after its input and target are stored. The PUT answers right away, so large jobs do not run into HTTP timeouts; the tasks are then created in the background in batches of `materialization-batch-size`, and `materialized-tasks` in the report shows the progress. Interrupted creation is resumed by housekeeping once the job is older than `materialization-resume-after` (default 10 minutes; set it above the time the largest job takes to prepare), without losing IDs or resetting results. A job that is not fully prepared is never processed. If the storage permanently rejects its tasks (for example a missing permission), the job is completed with result `failed` instead of being retried, its unfinished references are reported as failed with error code `TASK_CREATION_REJECTED`, the cause is logged as an error, and retention deletes it like any other finished job.
 
@@ -104,13 +104,30 @@ Task failures go to the job report, never to the jEAP error handling. If the job
 
 Jobs submitted before this version (6.24.0 to 6.27.0 stored but never ran them) start running after the upgrade, with the target stored at their acceptance. There is no cancel API: check for open jobs before upgrading if they should not run.
 
-### Command topic and contracts
+### Command topics and contracts
 
-`upsert-command-topic` is required when maintenance is enabled and must be specific to the service instance: a topic shared with another system's index writer would deliver its commands to this one. The service principal needs Kafka ACLs to produce to and consume from it. The service instance declares the producer and consumer contracts for `UpsertSearchItemCommand` (`ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command`) on this topic, see [consumer contracts](consumer-contracts.md#maintenance-command-contracts); startup fails if they are missing.
+`upsert-command-topic` and `delete-command-topic` are required when maintenance is enabled and must be specific to the service instance: a topic shared with another system's index writer would deliver its commands to this one. The two topics must differ, startup fails otherwise. Each topic has its own consumers: `command-consumer-concurrency` applies per topic, so up to twice that many tasks run in parallel per instance. The service principal needs Kafka ACLs to produce to and consume from both. The service instance declares the producer and consumer contracts for `UpsertSearchItemCommand` (`ch.admin.bit.jeap.messagetype.jeap:upsert-search-item-command`) and `DeleteSearchItemCommand` (`ch.admin.bit.jeap.messagetype.jeap:delete-search-item-command`) on their topics, see [consumer contracts](consumer-contracts.md#maintenance-command-contracts); startup fails if they are missing.
+
+## Running delete jobs
+
+Delete jobs use the same dispatch, retries, recovery and completion as upsert jobs, with one `DeleteSearchItemCommand` per task on `delete-command-topic`. For each task, the service deletes the id from every target stored with the job. It never calls the provider and has no indexing flag; the rollover policy is not checked again.
+
+| OpenSearch answer | Outcome for the target |
+|-------------------|------------------------|
+| Document deleted | `deleted` |
+| Document not found, index exists | `already-absent` (success) |
+| Index does not exist | `failed`, `TARGET_INDEX_MISSING` |
+| Write block or access denied | `failed`, `INDEX_NOT_WRITABLE` |
+| Any other rejection | `failed`, `WRITE_REJECTED` |
+| 429, 5xx, connection error | retried like a transient upsert error |
+
+The id succeeds only if every target ended as `deleted` or `already-absent`; otherwise it fails, and the report shows the outcome of every target. A retry only processes targets without a final outcome; recorded outcomes are kept. After the last attempt the targets still without outcome fail with `TARGET_UNAVAILABLE`. If the service crashes after deleting a document but before saving the result, the repeated run finds the document gone and reports `already-absent` instead of `deleted`; both count as success. A business event recreating the document later is allowed: maintenance deletion is not a permanent block.
+
+Delete jobs submitted before this version (6.24.0 to 7.0.0 stored but never ran them) start running after the upgrade, with the single target stored at their acceptance: without `indexMajorVersion` that is the highest major of that time, not every major. Deletions cannot be undone and there is no cancel API: check for open delete jobs before upgrading if they should not run.
 
 ## Reports and paging
 
-Reports show the input, the resolved major and target, selection mode, submitter, timestamps and summary counts (`open`, `succeeded`, `failed`, `indexing-disabled`). An open task that already failed transiently shows its `attempts` and its last error. Once the unfinished tasks of a stalled job were sent again, a `dispatch` block shows the number of rounds (`redispatches`) and, while the job is open and stuck, `stuck-since`. `limit` and `cursor` query parameters page through all IDs, including IDs whose tasks are not yet created. A storage outage or throttling returns 503 with a generic message (details are only logged), a permanent storage rejection (e.g. missing permission) 500, a job too large for the storage 400, an unknown job 404.
+Reports show the input, the resolved major and target, selection mode, submitter, timestamps and summary counts (`open`, `succeeded`, `failed`, `indexing-disabled`). Upsert reports have a single `target` block. Delete reports have `target-selection` and a `targets` list with one entry per major, and every id lists its `targets` with `deletion-outcome` (missing while the target is not processed yet) and the target's `error`. An open task that already failed transiently shows its `attempts` and its last error. Once the unfinished tasks of a stalled job were sent again, a `dispatch` block shows the number of rounds (`redispatches`) and, while the job is open and stuck, `stuck-since`. `limit` and `cursor` query parameters page through all IDs, including IDs whose tasks are not yet created. A storage outage or throttling returns 503 with a generic message (details are only logged), a permanent storage rejection (e.g. missing permission) 500, a job too large for the storage 400, an unknown job 404.
 
 ## Completion and retention
 
@@ -139,7 +156,8 @@ jeap:
         housekeeping-interval: PT1M
         materialization-resume-after: PT10M
         upsert-command-topic: my-system-upsert-search-item-command   # required, specific to the service instance
-        command-consumer-concurrency: 1   # tasks run in parallel per instance
+        delete-command-topic: my-system-delete-search-item-command   # required, specific to the service instance, differs from upsert-command-topic
+        command-consumer-concurrency: 1   # tasks run in parallel per instance and command topic
         dispatch-batch-size: 500          # commands sent per batch, at most 10000
         dispatch-lease: PT2M
         task-max-attempts: 6              # the first try included
@@ -149,6 +167,6 @@ jeap:
         task-max-redispatches: 3          # then the job is reported as stuck
 ```
 
-When maintenance is enabled, these settings are validated at startup: sizes and durations must be positive, `task-retry-initial-backoff` must not exceed `task-retry-max-backoff`, `upsert-command-topic` must be set, and an invalid value stops the service.
+When maintenance is enabled, these settings are validated at startup: sizes and durations must be positive, `task-retry-initial-backoff` must not exceed `task-retry-max-backoff`, `upsert-command-topic` and `delete-command-topic` must be set and differ, and an invalid value stops the service.
 
 The service user needs create/read/write/delete access to both indices (see [opensearch-permissions.md](opensearch-permissions.md)).

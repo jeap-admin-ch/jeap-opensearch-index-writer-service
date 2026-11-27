@@ -185,8 +185,8 @@ class MaintenanceUpsertExecutionIT extends KafkaIntegrationTestBase {
         assertThat(entry(report, "exec-flagged").path("state").asString()).isEqualTo("indexing-disabled");
 
         featureManager.enable(FEATURE_FLAG);
-        Thread.sleep(3000);
-        assertThat(entry(report(jobId), "exec-flagged").path("state").asString()).as("not rerun").isEqualTo("indexing-disabled");
+        await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(500)).untilAsserted(() ->
+                assertThat(entry(report(jobId), "exec-flagged").path("state").asString()).as("not rerun").isEqualTo("indexing-disabled"));
         wireMock.verify(0, getRequestedFor(urlPathEqualTo(PROVIDER_PATH)).withQueryParam("origin_id", equalTo("exec-flagged")));
         assertThat(documentExists(FEATURE_FLAG_WRITE_ALIAS, "exec-flagged")).isFalse();
     }

@@ -1,10 +1,10 @@
 package ch.admin.bit.jeap.opensearch.indexwriter.adapter.kafka.maintenance;
 
 import ch.admin.bit.jeap.messaging.avro.AvroMessageKey;
+import ch.admin.bit.jeap.messaging.avro.AvroMessageType;
 import ch.admin.bit.jeap.messaging.kafka.contract.ContractsValidator;
 import ch.admin.bit.jeap.messaging.kafka.properties.KafkaProperties;
 import ch.admin.bit.jeap.messaging.kafka.spring.JeapKafkaBeanNames;
-import ch.admin.bit.jeap.opensearch.command.upsert.UpsertSearchItemCommand;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.ConditionalOnMaintenanceEnabled;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.MaintenanceProperties;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.TaskCommandProcessor;
@@ -24,6 +24,8 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.backoff.ExponentialBackOff;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -36,7 +38,7 @@ class MaintenanceCommandConsumerStarter {
     private final KafkaProperties kafkaProperties;
     private final ContractsValidator contractsValidator;
     private final BeanFactory beanFactory;
-    private ConcurrentMessageListenerContainer<AvroMessageKey, UpsertSearchItemCommand> container;
+    private final List<ConcurrentMessageListenerContainer<AvroMessageKey, ?>> containers = new ArrayList<>();
 
     MaintenanceCommandConsumerStarter(TaskCommandProcessor processor, MaintenanceProperties properties, KafkaProperties kafkaProperties,
                                       ContractsValidator contractsValidator, BeanFactory beanFactory) {
@@ -50,23 +52,32 @@ class MaintenanceCommandConsumerStarter {
     // Fails the startup if the service instance did not declare the contracts for its command topic
     @PostConstruct
     void verifyContracts() {
-        String topic = properties.getUpsertCommandTopic();
-        contractsValidator.ensurePublisherContract(UpsertSearchItemCommandBuilder.messageType(), topic);
-        contractsValidator.ensureConsumerContract(UpsertSearchItemCommandBuilder.messageType(), topic);
+        verifyContracts(UpsertSearchItemCommandBuilder.messageType(), properties.getUpsertCommandTopic());
+        verifyContracts(DeleteSearchItemCommandBuilder.messageType(), properties.getDeleteCommandTopic());
+    }
+
+    private void verifyContracts(AvroMessageType type, String topic) {
+        contractsValidator.ensurePublisherContract(type, topic);
+        contractsValidator.ensureConsumerContract(type, topic);
     }
 
     @EventListener(ApplicationReadyEvent.class)
     void start() {
-        String topic = properties.getUpsertCommandTopic();
+        start(properties.getUpsertCommandTopic(), new UpsertSearchItemCommandListener(processor));
+        start(properties.getDeleteCommandTopic(), new DeleteSearchItemCommandListener(processor));
+    }
+
+    private void start(String topic, Object listener) {
         log.info("Starting maintenance command listener on topic '{}' with concurrency {}", topic, properties.getCommandConsumerConcurrency());
-        container = listenerContainerFactory().createContainer(topic);
+        ConcurrentMessageListenerContainer<AvroMessageKey, ?> container = listenerContainerFactory().createContainer(topic);
         container.setConcurrency(properties.getCommandConsumerConcurrency());
         // Commands are work items: those sent before the consumer group first joined the topic must not be skipped.
         // Reading them again is harmless, finished tasks and unknown jobs are not run.
         container.getContainerProperties().getKafkaConsumerProperties().setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         container.setCommonErrorHandler(errorHandler());
-        container.setupMessageListener(new UpsertSearchItemCommandListener(processor));
+        container.setupMessageListener(listener);
         container.start();
+        containers.add(container);
     }
 
     // Task failures end up in the job report, never on the jEAP error topic. Storage failures, including rejected reads
@@ -86,16 +97,14 @@ class MaintenanceCommandConsumerStarter {
     }
 
     @SuppressWarnings("unchecked")
-    private ConcurrentKafkaListenerContainerFactory<AvroMessageKey, UpsertSearchItemCommand> listenerContainerFactory() {
+    private ConcurrentKafkaListenerContainerFactory<AvroMessageKey, ?> listenerContainerFactory() {
         String cluster = kafkaProperties.getDefaultClusterName();
-        return (ConcurrentKafkaListenerContainerFactory<AvroMessageKey, UpsertSearchItemCommand>)
+        return (ConcurrentKafkaListenerContainerFactory<AvroMessageKey, ?>)
                 beanFactory.getBean(new JeapKafkaBeanNames(cluster).getListenerContainerFactoryBeanName(cluster));
     }
 
     @PreDestroy
     void stop() {
-        if (container != null) {
-            container.stop(true);
-        }
+        containers.forEach(container -> container.stop(true));
     }
 }

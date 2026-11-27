@@ -31,7 +31,8 @@ public final class JobDtos {
     }
 
     public record DeleteJobRequest(String indexType,
-                                   @Schema(description = "Schema major of the job, the highest configured major if omitted") Integer indexMajorVersion,
+                                   @Schema(description = "Schema major to delete from; every major configured for the index type when the job is accepted if omitted")
+                                   Integer indexMajorVersion,
                                    List<DeleteReference> originReferences) {
     }
 
@@ -57,7 +58,7 @@ public final class JobDtos {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"task-id", "id", "state", "version", "actual-index-major-version", "actual-index-minor-version",
-            "deletion-outcome", "attempts", "error"})
+            "attempts", "error", "targets"})
     public record ReportReference(@JsonProperty("task-id") String taskId, String id,
                                   @Schema(description = "open, succeeded, failed or indexing-disabled")
                                   String state, String version,
@@ -65,10 +66,21 @@ public final class JobDtos {
                                   @Schema(description = "Schema major reported by the provider, only if known; distinct from the submitted version")
                                   Integer actualIndexMajorVersion,
                                   @JsonProperty("actual-index-minor-version") Integer actualIndexMinorVersion,
-                                  @JsonProperty("deletion-outcome") String deletionOutcome,
                                   @Schema(description = "Failed attempts of an open task that is retried after a transient error; error is then its last error")
                                   Integer attempts,
-                                  ReportError error) {
+                                  ReportError error,
+                                  @Schema(description = "Delete jobs only: one entry per job target, the id is succeeded only if every target is deleted or already absent")
+                                  List<ReportTargetOutcome> targets) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"index-major-version", "physical-index", "deletion-outcome", "error"})
+    public record ReportTargetOutcome(@JsonProperty("index-major-version") int indexMajorVersion,
+                                      @JsonProperty("physical-index") String physicalIndex,
+                                      @JsonProperty("deletion-outcome")
+                                      @Schema(description = "deleted, already-absent or failed; missing while the target is not processed yet")
+                                      String deletionOutcome,
+                                      ReportError error) {
     }
 
     public record ReportPage(int limit, int returned,
@@ -78,6 +90,11 @@ public final class JobDtos {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record ReportTarget(String selection, @JsonProperty("index-major-version") int indexMajorVersion,
                                @JsonProperty("physical-index") String physicalIndex, String rollover) {
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ReportJobTarget(@JsonProperty("index-major-version") int indexMajorVersion,
+                                  @JsonProperty("physical-index") String physicalIndex, String rollover) {
     }
 
     // Only reported once the unfinished tasks of a stalled job were sent again
@@ -93,7 +110,7 @@ public final class JobDtos {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"message", "operation", "indexType", "indexMajorVersion", "job-id", "job-type", "job-state",
             "started", "report-created", "started-by-name", "started-by-ext-id", "summary", "originReferences", "page",
-            "target", "dispatch", "job-result", "completed"})
+            "target", "target-selection", "targets", "dispatch", "job-result", "completed"})
     public record JobReport(Message message, ReportOperation operation, String indexType, Integer indexMajorVersion,
                             @JsonProperty("job-id") String jobId,
                             @JsonProperty("job-type") String jobType,
@@ -105,7 +122,13 @@ public final class JobDtos {
                             ReportSummary summary,
                             List<ReportReference> originReferences,
                             ReportPage page,
+                            @Schema(description = "Upsert jobs only")
                             ReportTarget target,
+                            @JsonProperty("target-selection")
+                            @Schema(description = "Delete jobs only: explicit, all (every configured major), or highest for jobs accepted before 8.0.0")
+                            String targetSelection,
+                            @Schema(description = "Delete jobs only: one entry per selected major")
+                            List<ReportJobTarget> targets,
                             ReportDispatch dispatch,
                             @JsonProperty("job-result") String jobResult,
                             String completed) {

@@ -26,7 +26,7 @@ class UpsertSearchItemCommandListenerTest {
 
     @Test
     void onMessage_processesTheTaskAndThenAcknowledges() {
-        listener.onMessage(record(command()), acknowledgment);
+        listener.onMessage(consumerRecord(command()), acknowledgment);
 
         var order = inOrder(processor, acknowledgment);
         order.verify(processor).process(new TaskCommand(JobType.UPSERT, job.jobId(), task.taskId(), "12345", "17",
@@ -39,7 +39,7 @@ class UpsertSearchItemCommandListenerTest {
         UpsertSearchItemCommand command = command();
         command.getPayload().setTaskId("not-a-uuid");
 
-        listener.onMessage(record(command), acknowledgment);
+        listener.onMessage(consumerRecord(command), acknowledgment);
 
         verifyNoInteractions(processor);
         verify(acknowledgment).acknowledge();
@@ -48,8 +48,9 @@ class UpsertSearchItemCommandListenerTest {
     @Test
     void onMessage_doesNotAcknowledgeWhenTheResultCouldNotBeSaved() {
         doThrow(new JobStorageUnavailableException("task index down", null)).when(processor).process(any());
+        ConsumerRecord<AvroMessageKey, UpsertSearchItemCommand> message = consumerRecord(command());
 
-        assertThatThrownBy(() -> listener.onMessage(record(command()), acknowledgment))
+        assertThatThrownBy(() -> listener.onMessage(message, acknowledgment))
                 .isInstanceOf(JobStorageUnavailableException.class);
 
         verifyNoInteractions(acknowledgment);
@@ -59,7 +60,7 @@ class UpsertSearchItemCommandListenerTest {
         return UpsertSearchItemCommandBuilder.builder("JEAP", "my-index-writer").task(job, task).build();
     }
 
-    private static ConsumerRecord<AvroMessageKey, UpsertSearchItemCommand> record(UpsertSearchItemCommand command) {
+    private static ConsumerRecord<AvroMessageKey, UpsertSearchItemCommand> consumerRecord(UpsertSearchItemCommand command) {
         return new ConsumerRecord<>("my-upsert-command", 0, 0L, null, command);
     }
 }

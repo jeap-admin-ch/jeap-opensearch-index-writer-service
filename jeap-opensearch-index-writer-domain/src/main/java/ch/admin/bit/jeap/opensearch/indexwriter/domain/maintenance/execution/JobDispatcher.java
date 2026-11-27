@@ -10,7 +10,6 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobModel.
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobState;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobStorage.JobRepository;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobStorage.TaskRepository;
-import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobType;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.MaterializationState;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.TaskState;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.Wire;
@@ -90,10 +89,8 @@ public class JobDispatcher {
                 current -> resend(current, "redispatch", (after, limit) -> taskRepository.findOpenUnscheduled(current.jobId(), after, limit), false));
     }
 
-    // Only upsert jobs are run so far; delete jobs are stored and reported, but not executed yet
     private static boolean isExecutable(Job job) {
-        return job.type() == JobType.UPSERT && job.state() == JobState.OPEN
-               && job.materializationState() == MaterializationState.MATERIALIZED;
+        return job.state() == JobState.OPEN && job.materializationState() == MaterializationState.MATERIALIZED;
     }
 
     // change is stored together with the lease, so that it is recorded only if this instance gets to do the work

@@ -5,12 +5,16 @@ import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.ConditionalOn
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.MaintenanceTargetWriter;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.TargetWriteException;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.execution.TaskErrorCode;
+import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.DeletionOutcome;
 import ch.admin.bit.jeap.opensearch.indexwriter.domain.maintenance.job.JobExceptions.JobStorageUnavailableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.ErrorCause;
 import org.opensearch.client.opensearch._types.OpenSearchException;
+import org.opensearch.client.opensearch._types.Result;
+import org.opensearch.client.opensearch.core.DeleteRequest;
+import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.IndexRequest;
 import org.opensearch.client.transport.httpclient5.ResponseException;
 import org.springframework.stereotype.Component;
@@ -68,6 +72,29 @@ class OpenSearchMaintenanceTargetWriter implements MaintenanceTargetWriter {
         }
     }
 
+    @Override
+    public DeletionOutcome delete(String physicalIndex, String documentId) {
+        try {
+            DeleteResponse response = openSearchClient.delete(new DeleteRequest.Builder().index(physicalIndex).id(documentId).build());
+            return response.result() == Result.Deleted ? DeletionOutcome.DELETED : DeletionOutcome.ALREADY_ABSENT;
+        } catch (Exception e) {
+            if (isDocumentNotFound(e)) {
+                return DeletionOutcome.ALREADY_ABSENT;
+            }
+            throw translate(physicalIndex, documentId, e);
+        }
+    }
+
+    // A missing document and a missing index are both answered with 404; only a missing index is an error
+    private static boolean isDocumentNotFound(Exception e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof OpenSearchException o) {
+                return o.status() == 404 && (o.error() == null || !INDEX_NOT_FOUND.equals(o.error().type()));
+            }
+        }
+        return false;
+    }
+
     private static TargetWriteException translate(String physicalIndex, String documentId, Exception e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof OpenSearchException o) {
@@ -81,13 +108,13 @@ class OpenSearchMaintenanceTargetWriter implements MaintenanceTargetWriter {
             }
         }
         if (isTransportFailure(e)) {
-            return TargetWriteException.unavailable("Writing document %s to %s failed: %s".formatted(documentId, physicalIndex, e), e);
+            return TargetWriteException.unavailable("Request for document %s in %s failed: %s".formatted(documentId, physicalIndex, e), e);
         }
         // Anything else (e.g. the document cannot be serialised) is a defect: retrying cannot help and must not hide it
         if (e instanceof RuntimeException runtimeException) {
             throw runtimeException;
         }
-        throw new IllegalStateException("Writing document %s to %s failed unexpectedly".formatted(documentId, physicalIndex), e);
+        throw new IllegalStateException("Request for document %s in %s failed unexpectedly".formatted(documentId, physicalIndex), e);
     }
 
     // ApacheHttpClient5Transport reports connection problems as IOException, AwsSdk2Transport as SdkClientException

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0] - 2026-11-27
+
+### Added
+- Delete maintenance jobs are run: one `DeleteSearchItemCommand` per task deletes the id from every target stored with the job, without any provider call; an already absent document counts as success (see docs/maintenance-jobs.md)
+- Outcome per target (`deleted`, `already-absent`, `failed`) for delete tasks; a retry only processes the targets without a final outcome
+
+### Changed
+- **Breaking** (maintenance enabled only): new required property `jeap.opensearch.indexwriter.maintenance.delete-command-topic` and new contract annotations `@JeapMessageProducerContract` and `@JeapMessageConsumerContract` for `DeleteSearchItemCommand` on it (see docs/consumer-contracts.md); startup fails without them or if it equals `upsert-command-topic`. The service principal needs Kafka ACLs for the topic
+- **Breaking** (maintenance API): a delete job without `indexMajorVersion` deletes from every schema major configured for the index type (selection `all`) instead of the highest only; delete jobs accepted before keep their single target
+- **Breaking** (maintenance API): delete reports show `target-selection` and a `targets` list instead of `target`, and every id lists its `targets` with their `deletion-outcome` instead of a single `deletion-outcome`
+- Job and task indices are upgraded in place to schema version 3 on startup; 7.0.0 still starts on them, but cannot read delete jobs with selection `all`: delete those jobs and their tasks before rolling back (see docs/maintenance-jobs.md)
+- `command-consumer-concurrency` applies per command topic: upsert and delete tasks each get that many consumers per instance
+- Delete jobs stored by 6.24.0 to 7.0.0 start running after the upgrade
+
 ## [7.0.0] - 2026-11-27
 
 ### Added
